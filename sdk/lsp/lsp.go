@@ -15,9 +15,11 @@ import (
 type Server struct {
 	methods       *Methods
 	conn          io.ReadWriteCloser
-	Logger        *zap.SugaredLogger
 	cancel        <-chan struct{}
 	isInitialized bool
+	client        protocol.Client
+
+	Logger *zap.SugaredLogger
 }
 
 // Create a new server backed by `Methods`.
@@ -26,6 +28,14 @@ func NewServer(methods *Methods, conn io.ReadWriteCloser) Server {
 		methods: methods,
 		conn:    conn,
 	}
+}
+
+type ctxKey = int
+
+const ctxLoggerKey ctxKey = iota
+
+func Logger(ctx context.Context) *zap.SugaredLogger {
+	return ctx.Value(ctxLoggerKey).(*zap.SugaredLogger)
 }
 
 func (s *Server) Run() error {
@@ -37,6 +47,7 @@ func (s *Server) Run() error {
 		s.Logger = logger.Sugar()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	ctx = context.WithValue(ctx, ctxLoggerKey, s.Logger)
 	defer cancel()
 	s.run(ctx)
 	<-s.cancel
@@ -58,7 +69,7 @@ func (s *Server) run(ctx context.Context) context.Context {
 
 	stream := jsonrpc2.NewStream(s.conn)
 	go func() {
-		ctx, _, _ = protocol.NewServer(ctx, s.methods.serve(), stream, s.Logger.Desugar())
+		ctx, _, s.client = protocol.NewServer(ctx, s.methods.serve(), stream, s.Logger.Desugar())
 	}()
 	return ctx
 }

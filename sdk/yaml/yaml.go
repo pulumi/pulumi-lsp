@@ -1,34 +1,34 @@
 package yaml
 
 import (
-	"context"
-
 	"go.lsp.dev/protocol"
 
 	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
 )
 
 type server struct {
+	docs map[protocol.DocumentURI]*document
+}
+
+type document struct {
+	text string
+}
+
+func newDocument(text string) *document {
+	return &document{text: text}
 }
 
 func Methods() *lsp.Methods {
-	server := &server{}
-	return &lsp.Methods{
-		InitializeFunc:  server.initialize,
-		InitializedFunc: server.initialized,
+	server := &server{
+		docs: map[protocol.DocumentURI]*document{},
 	}
+	return lsp.Methods{
+		DidOpenFunc: server.didOpen,
+	}.DefaultInitializer("pulumi-lsp", "0.1.0")
 }
 
-func (s *server) initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
-	return &protocol.InitializeResult{
-		Capabilities: protocol.ServerCapabilities{},
-		ServerInfo: &protocol.ServerInfo{
-			Name:    "pulumi-yaml-lsp",
-			Version: "0.1.0",
-		},
-	}, nil
-}
-
-func (s *server) initialized(ctx context.Context, params *protocol.InitializedParams) error {
-	return nil
+func (s *server) didOpen(client lsp.Client, params *protocol.DidOpenTextDocumentParams) error {
+	err := client.LogDebugf("Opened file %s:\n---\n%s---", params.TextDocument.URI.Filename(), params.TextDocument.Text)
+	s.docs[params.TextDocument.URI] = newDocument(params.TextDocument.Text)
+	return err
 }
