@@ -30,14 +30,6 @@ func NewServer(methods *Methods, conn io.ReadWriteCloser) Server {
 	}
 }
 
-type ctxKey = int
-
-const ctxLoggerKey ctxKey = iota
-
-func Logger(ctx context.Context) *zap.SugaredLogger {
-	return ctx.Value(ctxLoggerKey).(*zap.SugaredLogger)
-}
-
 func (s *Server) Run() error {
 	if s.Logger == nil {
 		logger, err := zap.NewDevelopment()
@@ -47,7 +39,6 @@ func (s *Server) Run() error {
 		s.Logger = logger.Sugar()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	ctx = context.WithValue(ctx, ctxLoggerKey, s.Logger)
 	defer cancel()
 	s.run(ctx)
 	<-s.cancel

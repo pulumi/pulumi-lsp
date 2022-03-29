@@ -25,13 +25,11 @@ export function activate(context: ExtensionContext) {
     ],
   };
 
-  window.showInformationMessage("I have loaded something!");
-
   // Create the language client and start the client.
   const disposable = new LanguageClient(
     "Language Server Example",
     serverOptions,
-    clientOptions
+    clientOptions,
   ).start();
 
   // Push the disposable to the context's subscriptions so that the

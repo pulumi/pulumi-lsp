@@ -1,4 +1,7 @@
-GO          := go
+GO        := go
+GOPRIVATE := github.com/pulumi/pulumi-yaml
+export GOPRIVATE
+
 CONCURRENCY ?= 10
 
 build: vscode-client lsp-server
