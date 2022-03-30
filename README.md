@@ -27,9 +27,18 @@ writing [Pulumi YAML](https://github.com/pulumi/pulumi-yaml).
 - [ ] Fill in input properties
 
 ## Platforms
+The server is theoretically deployable to any editor that supports LSP.
 
-The server is theoretically deployable to any editor that supports LSP. Because
-[VS Code](https://code.visualstudio.com) is the most common editor, I used it
-for initial testing. I hope to have a fully functioning mode for
+### VS Code
+
+Because [VS Code](https://code.visualstudio.com) is the most common editor, I
+used it for initial testing. There is a `.vscode` folder that contains the
+necessary plugin description to run the server.
+
+### Emacs
+
+I hope to have a fully functioning mode for
 [emacs](https://www.gnu.org/software/emacs/) by end of project, since then I can
-actually use the application.
+actually use the application. I plan to test using
+[emacs-lsp](https://emacs-lsp.github.io/lsp-mode/), but other LSP packages
+([eglot](https://github.com/joaotavora/eglot)) should also work.
