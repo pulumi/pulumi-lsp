@@ -1,4 +1,9 @@
-// Bind performs static analysis on a YAML document. The entry point for
+// Bind performs static analysis on a YAML document. The entry point for the package is `NewDecl`.
+//
+// bind.go contains logic for the initial non-schema binding of an `ast.TemplateDecl` into a `Decl`.
+// query.go contains logic to get information out of a `Decl`.
+// schema.go handles loading appropriate schemas and binding them to an existing `Decl`.
+// diags.go contains the diagnostic error messages used.
 package bind
 
 import (
@@ -35,13 +40,6 @@ type Reference struct {
 	access   []ast.PropertyAccessor
 }
 
-func (b *Decl) Diags() hcl.Diagnostics {
-	if b == nil {
-		return nil
-	}
-	return b.diags
-}
-
 func (b *Decl) newRefernce(variable string, loc *hcl.Range, accessor []ast.PropertyAccessor) {
 	v, ok := b.variables[variable]
 	ref := Reference{location: loc, access: accessor}
@@ -69,6 +67,10 @@ type Resource struct {
 	token      string
 	defined    *ast.ResourcesMapEntry
 	definition *schema.Resource
+}
+
+func (r *Resource) Schema() *schema.Resource {
+	return r.definition
 }
 
 type Invoke struct {

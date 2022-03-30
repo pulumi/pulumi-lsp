@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
+	yaml "github.com/pulumi/pulumi-yaml/pkg/pulumiyaml"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 )
@@ -27,7 +28,7 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 			if !pkg.isValid() {
 				continue
 			}
-			if f, ok := pkg.invokes[invoke.token]; ok {
+			if f, ok := pkg.ResolveFunction(invoke.token); ok {
 				// There is something wrong with this definition
 				if f.diag != nil {
 					d.diags = d.diags.Extend(f.diag(typeLoc))
@@ -53,7 +54,7 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 				if !pkg.isValid() {
 					continue
 				}
-				if f, ok := pkg.resources[resource.token]; ok {
+				if f, ok := pkg.ResolveResource(resource.token); ok {
 					// There is something wrong with this definition
 					if f.diag != nil {
 						d.diags = d.diags.Extend(f.diag(typeLoc))
@@ -133,6 +134,24 @@ type pkgCache struct {
 	// A package level warning, applied to every resource loaded with the
 	// package.
 	diag diagsFromLocation
+}
+
+func (p *pkgCache) ResolveResource(token string) (ResourceSpec, bool) {
+	tk, err := yaml.NewResourcePackage(p.p).ResolveResource(token)
+	if err != nil {
+		return ResourceSpec{}, false
+	}
+	r, ok := p.resources[string(tk)]
+	return r, ok
+}
+
+func (p *pkgCache) ResolveFunction(token string) (FunctionSpec, bool) {
+	tk, err := yaml.NewResourcePackage(p.p).ResolveFunction(token)
+	if err != nil {
+		return FunctionSpec{}, false
+	}
+	f, ok := p.invokes[string(tk)]
+	return f, ok
 }
 
 func (p pkgCache) isValid() bool {

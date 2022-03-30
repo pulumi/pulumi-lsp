@@ -112,14 +112,17 @@ func (s *server) hover(client lsp.Client, params *protocol.HoverParams) (*protoc
 	if doc.analysis == nil {
 		panic("Need to implement wait mechanism for docs")
 	}
-	typ, location, err := objectAtPoint(doc.analysis.parsed, params.Position)
+	typ, location, err := doc.objectAtPoint(params.Position)
 	if err != nil {
 		return nil, fmt.Errorf("Could not find a object at point %v", params.Position)
 	} else {
 		client.LogInfof("Could not find an object to hover over at %v in %s", params.Position, uri.Filename())
 	}
-	return &protocol.Hover{
-		Contents: describeType(typ),
-		Range:    &location,
-	}, nil
+	if typ != nil {
+		return &protocol.Hover{
+			Contents: describeType(typ),
+			Range:    &location,
+		}, nil
+	}
+	return nil, nil
 }
