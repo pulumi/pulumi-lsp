@@ -10,19 +10,21 @@ import (
 	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 )
 
 type server struct {
 	docs map[protocol.DocumentURI]*document
 
 	loader   schema.Loader
-	loaderMx sync.Mutex
+	loaderMx *sync.Mutex
 }
 
 func Methods(host plugin.Host) *lsp.Methods {
 	server := &server{
-		docs:   map[protocol.DocumentURI]*document{},
-		loader: schema.NewPluginLoader(host),
+		docs:     map[protocol.DocumentURI]*document{},
+		loader:   schema.NewPluginLoader(host),
+		loaderMx: &sync.Mutex{},
 	}
 	return lsp.Methods{
 		DidOpenFunc:   server.didOpen,
@@ -33,7 +35,7 @@ func Methods(host plugin.Host) *lsp.Methods {
 }
 
 func (s *server) setDocument(text lsp.Document) *document {
-	doc := &document{text: text}
+	doc := &document{text: text, server: s}
 	s.docs[text.URI()] = doc
 	return doc
 }
@@ -46,15 +48,15 @@ func (s *server) getDocument(uri protocol.DocumentURI) (*document, bool) {
 type document struct {
 	text lsp.Document
 
-	server server
+	server *server
 
 	analysis *documentAnalysisPipeline
 }
 
 // Returns a loader. The cancel function must be called when done with the loader.
-func (s *server) GetLoader(c lsp.Client) (schema.Loader, func()) {
-	s.loaderMx.Lock()
-	return LogSchemaLoader{s.loader, c}, func() { s.loaderMx.Lock() }
+func (s *server) GetLoader(c lsp.Client) schema.Loader {
+	contract.Assert(s.loaderMx != nil)
+	return SchemaLoader{s.loader, c, s.loaderMx}
 }
 
 func (d *document) process(c lsp.Client) {
@@ -64,8 +66,8 @@ func (d *document) process(c lsp.Client) {
 	pipe := &documentAnalysisPipeline{}
 	pipe.ctx, pipe.cancel = context.WithCancel(c.Context())
 	d.analysis = pipe
-	loader, unlock := d.server.GetLoader(c)
-	go pipe.kickoff(c, d.text, loader, unlock)
+	loader := d.server.GetLoader(c)
+	go pipe.kickoff(c, d.text, loader)
 }
 
 func (s *server) didOpen(client lsp.Client, params *protocol.DidOpenTextDocumentParams) error {

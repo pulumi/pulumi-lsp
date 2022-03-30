@@ -1,6 +1,8 @@
 package yaml
 
 import (
+	"sync"
+
 	"github.com/blang/semver"
 	"github.com/hashicorp/hcl/v2"
 	"go.lsp.dev/protocol"
@@ -76,17 +78,20 @@ func combineHCLRange(lower, upper *hcl.Range) *hcl.Range {
 	}
 }
 
-type LogSchemaLoader struct {
+type SchemaLoader struct {
 	inner schema.Loader
 	c     lsp.Client
+	m     *sync.Mutex
 }
 
-func (l LogSchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.Package, error) {
+func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.Package, error) {
 	v := ""
 	if version != nil {
 		v = version.String()
 	}
 	l.c.LogInfof("Loading package (%s,%s) ", pkg, v)
+	l.m.Lock()
+	defer l.m.Unlock()
 	load, err := l.inner.LoadPackage(pkg, version)
 	if err == nil {
 		l.c.LogInfof("Successfully loaded pkg (%s,%s)", pkg, v)

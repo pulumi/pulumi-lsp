@@ -66,8 +66,7 @@ func (d *documentAnalysisPipeline) schematize(l schema.Loader) {
 
 // Runs the analysis pipeline.
 // Should always be called asynchronously.
-func (p *documentAnalysisPipeline) kickoff(c lsp.Client, text lsp.Document, loader schema.Loader, onDone func()) {
-	defer onDone()
+func (p *documentAnalysisPipeline) kickoff(c lsp.Client, text lsp.Document, loader schema.Loader) {
 	defer p.cancel()
 	// We are resetting the analysis pipeline
 	c.LogInfof("Kicking off analysis for %s", text.URI().Filename())

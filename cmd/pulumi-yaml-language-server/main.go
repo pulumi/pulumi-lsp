@@ -11,17 +11,7 @@ import (
 )
 
 func main() {
-	var cfg plugin.ConfigSource
-	pwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	sink := diag.DefaultSink(&stdio{false}, &stdio{false}, diag.FormatOptions{})
-	context, err := plugin.NewContext(sink, sink, nil, cfg, pwd, nil, false, nil)
-	if err != nil {
-		panic(err)
-	}
-	host, err := plugin.NewDefaultHost(context, nil, nil, false)
+	host, err := defaultPluginHost()
 	if err != nil {
 		panic(err)
 	}
@@ -30,6 +20,20 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func defaultPluginHost() (plugin.Host, error) {
+	var cfg plugin.ConfigSource
+	pwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	sink := diag.DefaultSink(&stdio{false}, &stdio{false}, diag.FormatOptions{})
+	context, err := plugin.NewContext(sink, sink, nil, cfg, pwd, nil, false, nil)
+	if err != nil {
+		return nil, err
+	}
+	return plugin.NewDefaultHost(context, nil, nil, false)
 }
 
 // An io.ReadWriteCloser, whose value indicates if the closer is closed.
