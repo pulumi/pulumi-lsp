@@ -101,7 +101,7 @@ func (m Methods) DefaultInitializer(name, version string) *Methods {
 			Capabilities: protocol.ServerCapabilities{
 				TextDocumentSync: &protocol.TextDocumentSyncOptions{
 					OpenClose:         m.DidOpenFunc != nil || m.DidCloseFunc != nil,
-					Change:            protocol.TextDocumentSyncKindFull, // TODO: Can we figure out how do derive this
+					Change:            protocol.TextDocumentSyncKindIncremental, // TODO: Can we figure out how do derive this
 					WillSave:          m.WillSaveFunc != nil,
 					WillSaveWaitUntil: m.WillSaveWaitUntilFunc != nil,
 					Save: &protocol.SaveOptions{

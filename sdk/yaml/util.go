@@ -3,9 +3,12 @@ package yaml
 import (
 	"github.com/hashicorp/hcl/v2"
 	"go.lsp.dev/protocol"
+
+	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 )
 
 func convertRange(r *hcl.Range) protocol.Range {
+	contract.Assertf(r != nil, "Cannot convert an empty range")
 	return protocol.Range{
 		Start: convertPosition(r.Start),
 		End:   convertPosition(r.End),
@@ -13,8 +16,9 @@ func convertRange(r *hcl.Range) protocol.Range {
 }
 
 func convertPosition(p hcl.Pos) protocol.Position {
+	contract.Assertf(p.Line != 0, "hcl.Pos line starts at 1")
 	return protocol.Position{
-		Line:      uint32(p.Line),
+		Line:      uint32(p.Line - 1),
 		Character: uint32(p.Column),
 	}
 }
@@ -29,4 +33,41 @@ func convertSeverity(s hcl.DiagnosticSeverity) protocol.DiagnosticSeverity {
 		return protocol.DiagnosticSeverityInformation
 	}
 
+}
+
+// Check wheither a lsp position is contained in a yaml range.
+func posInRange(r *hcl.Range, pos protocol.Position) bool {
+	if r == nil {
+		return false
+	}
+	rng := convertRange(r)
+	s := rng.Start
+	e := rng.End
+	return (posLessThen(s, pos) && posGreaterThen(pos, e)) || pos == s || pos == e
+}
+
+// Returns true if p1 < p2
+func posGreaterThen(p1, p2 protocol.Position) bool {
+	return (p1.Line < p2.Line) ||
+		(p1.Line == p2.Line && p1.Character < p2.Character)
+}
+
+// Returns true if p1 > p2
+func posLessThen(p1, p2 protocol.Position) bool {
+	return p1 != p2 && posGreaterThen(p2, p1)
+}
+
+func combineRange(lower, upper protocol.Range) protocol.Range {
+	return protocol.Range{
+		Start: lower.Start,
+		End:   upper.End,
+	}
+}
+
+func combineHCLRange(lower, upper *hcl.Range) *hcl.Range {
+	return &hcl.Range{
+		Filename: lower.Filename,
+		Start:    lower.Start,
+		End:      upper.End,
+	}
 }

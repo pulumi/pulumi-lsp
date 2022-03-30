@@ -68,3 +68,7 @@ func (c *Client) LogInfof(msg string, args ...interface{}) error {
 func (c *Client) LogDebugf(msg string, args ...interface{}) error {
 	return c.logMessage(protocol.MessageTypeLog, fmt.Sprintf(msg, args...))
 }
+
+func (c *Client) Context() context.Context {
+	return c.ctx
+}

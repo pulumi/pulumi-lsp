@@ -5,7 +5,9 @@ go 1.18
 require (
 	github.com/hashicorp/hcl/v2 v2.11.1
 	github.com/pulumi/pulumi-yaml v0.1.0
+	github.com/pulumi/pulumi/pkg/v3 v3.27.1-0.20220325185156-017dcad7786b
 	github.com/pulumi/pulumi/sdk/v3 v3.27.1-0.20220325185156-017dcad7786b
+	github.com/stretchr/testify v1.7.1
 	go.lsp.dev/jsonrpc2 v0.10.0
 	go.lsp.dev/protocol v0.12.0
 	go.uber.org/zap v1.21.0
@@ -17,8 +19,10 @@ require (
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cheggaaa/pb v1.0.29 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/djherbis/times v1.5.0 // indirect
 	github.com/emirpasic/gods v1.12.0 // indirect
+	github.com/gedex/inflector v0.0.0-20170307190818-16278e9db813 // indirect
 	github.com/gofrs/uuid v4.2.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.0.0 // indirect
@@ -41,7 +45,7 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pgavlin/goldmark v1.1.33-0.20200616210433-b5eb04559386 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pulumi/pulumi/pkg/v3 v3.27.1-0.20220325185156-017dcad7786b // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
