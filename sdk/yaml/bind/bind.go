@@ -1,4 +1,5 @@
-package yaml
+// Bind performs static analysis on a YAML document. The entry point for
+package bind
 
 import (
 	"fmt"
@@ -9,7 +10,7 @@ import (
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 )
 
-type BoundDecl struct {
+type Decl struct {
 	variables map[string]*Variable
 
 	// The output namespace
@@ -19,6 +20,8 @@ type BoundDecl struct {
 	invokes map[*Invoke]struct{}
 
 	diags hcl.Diagnostics
+
+	loadedPackages map[string]pkgCache
 }
 
 type Variable struct {
@@ -32,7 +35,14 @@ type Reference struct {
 	access   []ast.PropertyAccessor
 }
 
-func (b *BoundDecl) NewRefernce(variable string, loc *hcl.Range, accessor []ast.PropertyAccessor) {
+func (b *Decl) Diags() hcl.Diagnostics {
+	if b == nil {
+		return nil
+	}
+	return b.diags
+}
+
+func (b *Decl) newRefernce(variable string, loc *hcl.Range, accessor []ast.PropertyAccessor) {
 	v, ok := b.variables[variable]
 	ref := Reference{location: loc, access: accessor}
 	if ok {
@@ -42,7 +52,7 @@ func (b *BoundDecl) NewRefernce(variable string, loc *hcl.Range, accessor []ast.
 	}
 }
 
-func (v *Variable) DefinitionRange() *hcl.Range {
+func (v *Variable) definitionRange() *hcl.Range {
 	switch d := v.definition.(type) {
 	case ast.ConfigMapEntry:
 		return d.Key.Syntax().Syntax().Range()
@@ -67,16 +77,16 @@ type Invoke struct {
 	definition *schema.Function
 }
 
-func NewBoundDecl(decl *ast.TemplateDecl) (*BoundDecl, error) {
-	bound := &BoundDecl{map[string]*Variable{}, map[string]ast.PropertyMapEntry{}, map[*Invoke]struct{}{}, hcl.Diagnostics{}}
+func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
+	bound := &Decl{map[string]*Variable{}, map[string]ast.PropertyMapEntry{}, map[*Invoke]struct{}{}, hcl.Diagnostics{}, map[string]pkgCache{}}
 
 	for _, c := range decl.Configuration.Entries {
 		other, alreadyReferenced := bound.variables[c.Key.Value]
 		if alreadyReferenced && other.definition != nil {
 			bound.diags = bound.diags.Append(
-				duplicateSource(c.Key.Value,
+				duplicateSourceDiag(c.Key.Value,
 					c.Key.Syntax().Syntax().Range(),
-					other.DefinitionRange(),
+					other.definitionRange(),
 				),
 			)
 		} else {
@@ -89,9 +99,9 @@ func NewBoundDecl(decl *ast.TemplateDecl) (*BoundDecl, error) {
 		other, alreadyReferenced := bound.variables[v.Key.Value]
 		if alreadyReferenced && other.definition != nil {
 			bound.diags = bound.diags.Append(
-				duplicateSource(v.Key.Value,
+				duplicateSourceDiag(v.Key.Value,
 					v.Key.Syntax().Syntax().Range(),
-					other.DefinitionRange(),
+					other.definitionRange(),
 				),
 			)
 		} else {
@@ -108,9 +118,9 @@ func NewBoundDecl(decl *ast.TemplateDecl) (*BoundDecl, error) {
 		other, alreadyReferenced := bound.variables[r.Key.Value]
 		if alreadyReferenced && other.definition != nil {
 			bound.diags = bound.diags.Append(
-				duplicateSource(r.Key.Value,
+				duplicateSourceDiag(r.Key.Value,
 					r.Key.Syntax().Syntax().Range(),
-					other.DefinitionRange(),
+					other.definitionRange(),
 				),
 			)
 		} else {
@@ -123,7 +133,7 @@ func NewBoundDecl(decl *ast.TemplateDecl) (*BoundDecl, error) {
 		// Because outputs cannot be referenced, we don't do a referenced check
 		other, alreadyDefined := bound.outputs[o.Key.Value]
 		if alreadyDefined {
-			bound.diags = bound.diags.Append(duplicateSource(o.Key.Value,
+			bound.diags = bound.diags.Append(duplicateSourceDiag(o.Key.Value,
 				o.Key.Syntax().Syntax().Range(),
 				other.Key.Syntax().Syntax().Range()))
 		} else {
@@ -141,21 +151,21 @@ func NewBoundDecl(decl *ast.TemplateDecl) (*BoundDecl, error) {
 
 // Performs analysis on bindings without a schema. This results in missing
 // variable errors and unused variable warnings.
-func (b *BoundDecl) analyzeBindings() error {
+func (b *Decl) analyzeBindings() error {
 	for name, v := range b.variables {
 		if v.definition == nil {
 			for _, use := range v.uses {
-				b.diags = append(b.diags, variableDoesNotExist(name, use))
+				b.diags = append(b.diags, variableDoesNotExistDiag(name, use))
 			}
 		}
 		if len(v.uses) == 0 {
-			b.diags = append(b.diags, unusedVariable(name, v.DefinitionRange()))
+			b.diags = append(b.diags, unusedVariableDiag(name, v.definitionRange()))
 		}
 	}
 	return nil
 }
 
-func (b *BoundDecl) bind(e ast.Expr) error {
+func (b *Decl) bind(e ast.Expr) error {
 	switch e := e.(type) {
 	// Primitive types: nothing to bind
 	case *ast.NullExpr, *ast.BooleanExpr, *ast.NumberExpr, *ast.StringExpr:
@@ -186,7 +196,7 @@ func (b *BoundDecl) bind(e ast.Expr) error {
 			keys := map[string]bool{}
 			keyStr, ok := el.Key.(*ast.StringExpr)
 			if ok && keys[keyStr.Value] {
-				b.diags = append(b.diags, duplicateKey(keyStr.Value, keyStr.Syntax().Syntax().Range()))
+				b.diags = append(b.diags, duplicateKeyDiag(keyStr.Value, keyStr.Syntax().Syntax().Range()))
 			}
 			err := b.bind(el.Key)
 			if err != nil {
@@ -250,7 +260,7 @@ func (b *BoundDecl) bind(e ast.Expr) error {
 	return nil
 }
 
-func (b *BoundDecl) bindInvoke(invoke *ast.InvokeExpr) error {
+func (b *Decl) bindInvoke(invoke *ast.InvokeExpr) error {
 	b.invokes[&Invoke{
 		token:   invoke.Token.Value,
 		defined: invoke,
@@ -258,7 +268,7 @@ func (b *BoundDecl) bindInvoke(invoke *ast.InvokeExpr) error {
 	return nil
 }
 
-func (b *BoundDecl) bindResource(r *ast.ResourcesMapEntry) error {
+func (b *Decl) bindResource(r *ast.ResourcesMapEntry) error {
 	res := Resource{
 		token:   r.Value.Type.Value,
 		defined: r,
@@ -267,7 +277,7 @@ func (b *BoundDecl) bindResource(r *ast.ResourcesMapEntry) error {
 	for _, entry := range r.Value.Properties.Entries {
 		k := entry.Key.Value
 		if entries[k] {
-			b.diags = append(b.diags, duplicateKey(k, entry.Key.Syntax().Syntax().Range()))
+			b.diags = append(b.diags, duplicateKeyDiag(k, entry.Key.Syntax().Syntax().Range()))
 		}
 		if err := b.bind(entry.Key); err != nil {
 			return err
@@ -281,17 +291,17 @@ func (b *BoundDecl) bindResource(r *ast.ResourcesMapEntry) error {
 	}
 	if other, ok := b.variables[r.Key.Value]; ok {
 		b.diags = append(b.diags,
-			duplicateSource(
+			duplicateSourceDiag(
 				r.Key.Value,
 				r.Key.Syntax().Syntax().Range(),
-				other.DefinitionRange()))
+				other.definitionRange()))
 	} else {
 		b.variables[r.Key.Value] = &Variable{definition: res}
 	}
 	return nil
 }
 
-func (b *BoundDecl) bindResourceOptions(opts ast.ResourceOptionsDecl) error {
+func (b *Decl) bindResourceOptions(opts ast.ResourceOptionsDecl) error {
 	// We only need to bind types that are backed by expressions that could
 	// contain variables.
 	for _, e := range []ast.Expr{opts.DependsOn, opts.Parent, opts.Provider, opts.Providers} {
@@ -302,57 +312,12 @@ func (b *BoundDecl) bindResourceOptions(opts ast.ResourceOptionsDecl) error {
 	return nil
 }
 
-func (b *BoundDecl) bindPropertyAccess(p *ast.PropertyAccess, loc *hcl.Range) error {
+func (b *Decl) bindPropertyAccess(p *ast.PropertyAccess, loc *hcl.Range) error {
 	l := p.Accessors
 	if v, ok := p.Accessors[0].(*ast.PropertyName); ok {
-		b.NewRefernce(v.Name, loc, l[1:])
+		b.newRefernce(v.Name, loc, l[1:])
 	} else {
-		b.diags = append(b.diags, propertyStartsWithIndex(p, loc))
+		b.diags = append(b.diags, propertyStartsWithIndexDiag(p, loc))
 	}
 	return nil
-}
-
-func propertyStartsWithIndex(p *ast.PropertyAccess, loc *hcl.Range) *hcl.Diagnostic {
-	return &hcl.Diagnostic{
-		Severity: hcl.DiagWarning,
-		Summary:  "Property access starts with index",
-		Detail:   fmt.Sprintf("Property accesses should start with a bound name: %s", p.String()),
-		Subject:  loc,
-	}
-}
-
-func duplicateSource(name string, subject *hcl.Range, prev *hcl.Range) *hcl.Diagnostic {
-	return &hcl.Diagnostic{
-		Severity: hcl.DiagError,
-		Summary:  "Duplicate Binding",
-		Detail:   fmt.Sprintf("'%s' has already been bound", name),
-		Subject:  subject,
-		Context:  prev,
-	}
-}
-
-func duplicateKey(key string, subject *hcl.Range) *hcl.Diagnostic {
-	return &hcl.Diagnostic{
-		Severity: hcl.DiagWarning,
-		Summary:  "Duplicate key",
-		Detail:   fmt.Sprintf("'%s' has already been used as a key in this map", key),
-		Subject:  subject,
-	}
-}
-
-func variableDoesNotExist(name string, use Reference) *hcl.Diagnostic {
-	return &hcl.Diagnostic{
-		Severity: hcl.DiagError,
-		Summary:  fmt.Sprintf("Missing variable '%s'", name),
-		Detail:   fmt.Sprintf("Reference to non-existant variable '%[1]s'. Consider adding a '%[1]s' to the variables section.", name),
-		Subject:  use.location,
-	}
-}
-
-func unusedVariable(name string, loc *hcl.Range) *hcl.Diagnostic {
-	return &hcl.Diagnostic{
-		Severity: hcl.DiagWarning,
-		Summary:  fmt.Sprintf("Variable '%s' is unused", name),
-		Subject:  loc,
-	}
 }

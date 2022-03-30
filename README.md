@@ -14,7 +14,7 @@ writing [Pulumi YAML](https://github.com/pulumi/pulumi-yaml).
 
 ### Hover
 - [ ] Resource info on hover
-- [ ] Same variable across the file
+- [ ] Highlight the variable at point across the file
 
 ### Completion
 - [ ] When entering input properties for a resource

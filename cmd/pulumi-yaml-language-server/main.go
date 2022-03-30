@@ -6,11 +6,27 @@ import (
 
 	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
 	"github.com/iwahbe/pulumi-lsp/sdk/yaml"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/diag"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
 )
 
 func main() {
-	server := lsp.NewServer(yaml.Methods(), &stdio{false})
-	err := server.Run()
+	var cfg plugin.ConfigSource
+	pwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	sink := diag.DefaultSink(&stdio{false}, &stdio{false}, diag.FormatOptions{})
+	context, err := plugin.NewContext(sink, sink, nil, cfg, pwd, nil, false, nil)
+	if err != nil {
+		panic(err)
+	}
+	host, err := plugin.NewDefaultHost(context, nil, nil, false)
+	if err != nil {
+		panic(err)
+	}
+	server := lsp.NewServer(yaml.Methods(host), &stdio{false})
+	err = server.Run()
 	if err != nil {
 		panic(err)
 	}

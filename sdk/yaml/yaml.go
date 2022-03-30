@@ -3,27 +3,26 @@ package yaml
 import (
 	"context"
 	"fmt"
-	"strings"
+	"sync"
 
 	"go.lsp.dev/protocol"
 
-	"github.com/hashicorp/hcl/v2"
 	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
-	yaml "github.com/pulumi/pulumi-yaml/pkg/pulumiyaml"
-	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
-	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/syntax"
+	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
 )
 
 type server struct {
 	docs map[protocol.DocumentURI]*document
 
-	schemas schemaHandler
+	loader   schema.Loader
+	loaderMx sync.Mutex
 }
 
-func Methods() *lsp.Methods {
+func Methods(host plugin.Host) *lsp.Methods {
 	server := &server{
-		docs:    map[protocol.DocumentURI]*document{},
-		schemas: schemaHandler{},
+		docs:   map[protocol.DocumentURI]*document{},
+		loader: schema.NewPluginLoader(host),
 	}
 	return lsp.Methods{
 		DidOpenFunc:   server.didOpen,
@@ -47,71 +46,15 @@ func (s *server) getDocument(uri protocol.DocumentURI) (*document, bool) {
 type document struct {
 	text lsp.Document
 
+	server server
+
 	analysis *documentAnalysisPipeline
 }
 
-type documentAnalysisPipeline struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	// First stage, program is parsed
-	parsed *ast.TemplateDecl
-	// Then the program is analyzed
-	bound *BoundDecl
-
-	// This is the combined list of diagnostics
-	diags syntax.Diagnostics
-}
-
-func (d *documentAnalysisPipeline) isDone() bool {
-	select {
-	case <-d.ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
-// Parse the document
-func (d *documentAnalysisPipeline) parse(text lsp.Document) {
-	// This is the first step of analysis, so we don't check for previous errors
-	var err error
-	d.parsed, d.diags, err = yaml.LoadYAML(text.URI().Filename(), strings.NewReader(text.String()))
-	if err != nil {
-		d.promoteError("Parse error", err)
-		d.cancel()
-	} else if d.parsed == nil {
-		d.promoteError("Parse error", fmt.Errorf("No template returned"))
-		d.cancel()
-	}
-}
-
-func (d *documentAnalysisPipeline) promoteError(msg string, err error) {
-	d.diags = append(d.diags, &syntax.Diagnostic{
-		Severity: hcl.DiagError,
-		Summary:  "Parse Error",
-		Detail:   d.diags.Error(),
-	})
-}
-
-// Runs the analysis pipeline.
-// Should always be called asynchronously.
-func (p *documentAnalysisPipeline) kickoff(c lsp.Client, text lsp.Document) {
-	// We are resetting the analysis pipeline
-	c.LogInfof("Kicking off analysis for %s", text.URI().Filename())
-	defer p.cancel()
-
-	if p.isDone() {
-		return
-	}
-	p.parse(text)
-	p.sendDiags(c, text.URI())
-
-	if p.isDone() {
-		return
-	}
-	p.bind()
-	p.sendDiags(c, text.URI())
+// Returns a loader. The cancel function must be called when done with the loader.
+func (s *server) GetLoader(c lsp.Client) (schema.Loader, func()) {
+	s.loaderMx.Lock()
+	return LogSchemaLoader{s.loader, c}, func() { s.loaderMx.Lock() }
 }
 
 func (d *document) process(c lsp.Client) {
@@ -121,43 +64,8 @@ func (d *document) process(c lsp.Client) {
 	pipe := &documentAnalysisPipeline{}
 	pipe.ctx, pipe.cancel = context.WithCancel(c.Context())
 	d.analysis = pipe
-	go pipe.kickoff(c, d.text)
-}
-
-func (d *documentAnalysisPipeline) bind() {
-	var err error
-	d.bound, err = NewBoundDecl(d.parsed)
-	if err != nil {
-		d.promoteError("Binding error", err)
-	} else {
-		d.diags = append(d.diags, d.bound.diags...)
-	}
-}
-
-// Actually send the report request to the lsp server
-func (d *documentAnalysisPipeline) sendDiags(c lsp.Client, uri protocol.DocumentURI) {
-	lspDiags := []protocol.Diagnostic{}
-	for _, diag := range d.diags {
-		diagnostic := protocol.Diagnostic{
-			Severity: convertSeverity(diag.Severity),
-			Source:   "pulumi-yaml",
-			Message:  diag.Summary + "\n" + diag.Detail,
-		}
-		if diag.Subject != nil {
-			diagnostic.Range = convertRange(diag.Subject)
-		}
-
-		lspDiags = append(lspDiags, diagnostic)
-		c.LogInfof("Preparing diagnostic %v", diagnostic)
-	}
-
-	// Diagnostics last until the next publish, so we need to publish even if we
-	// have not found any diags. This will clear the diags for the user.
-	c.PublishDiagnostics(&protocol.PublishDiagnosticsParams{
-		URI:         uri,
-		Version:     0,
-		Diagnostics: lspDiags,
-	})
+	loader, unlock := d.server.GetLoader(c)
+	go pipe.kickoff(c, d.text, loader, unlock)
 }
 
 func (s *server) didOpen(client lsp.Client, params *protocol.DidOpenTextDocumentParams) error {
@@ -202,7 +110,7 @@ func (s *server) hover(client lsp.Client, params *protocol.HoverParams) (*protoc
 	if doc.analysis == nil {
 		panic("Need to implement wait mechanism for docs")
 	}
-	typ, location, err := s.schemas.objectAtPoint(doc.analysis.parsed, params.Position)
+	typ, location, err := objectAtPoint(doc.analysis.parsed, params.Position)
 	if err != nil {
 		return nil, fmt.Errorf("Could not find a object at point %v", params.Position)
 	} else {

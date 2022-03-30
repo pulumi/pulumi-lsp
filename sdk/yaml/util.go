@@ -1,10 +1,14 @@
 package yaml
 
 import (
+	"github.com/blang/semver"
 	"github.com/hashicorp/hcl/v2"
 	"go.lsp.dev/protocol"
 
+	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
+
+	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
 )
 
 func convertRange(r *hcl.Range) protocol.Range {
@@ -70,4 +74,24 @@ func combineHCLRange(lower, upper *hcl.Range) *hcl.Range {
 		Start:    lower.Start,
 		End:      upper.End,
 	}
+}
+
+type LogSchemaLoader struct {
+	inner schema.Loader
+	c     lsp.Client
+}
+
+func (l LogSchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.Package, error) {
+	v := ""
+	if version != nil {
+		v = version.String()
+	}
+	l.c.LogInfof("Loading package (%s,%s) ", pkg, v)
+	load, err := l.inner.LoadPackage(pkg, version)
+	if err == nil {
+		l.c.LogInfof("Successfully loaded pkg (%s,%s)", pkg, v)
+	} else {
+		l.c.LogErrorf("Failed to load pkg (%s,%s): %s", pkg, v, err.Error())
+	}
+	return load, err
 }

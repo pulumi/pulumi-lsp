@@ -16,7 +16,7 @@ type schemaHandler struct {
 // Find the object at point, as well as it's location. An error indicates that
 // there was a problem getting the object at point. If no object is found, all
 // zero values are returned.
-func (s *schemaHandler) objectAtPoint(template *ast.TemplateDecl, pos protocol.Position) (schema.Type, protocol.Range, error) {
+func objectAtPoint(template *ast.TemplateDecl, pos protocol.Position) (schema.Type, protocol.Range, error) {
 	for _, r := range template.Resources.Entries {
 		keyRange := r.Key.Syntax().Syntax().Range()
 		valueRange := r.Value.Syntax().Syntax().Range()
