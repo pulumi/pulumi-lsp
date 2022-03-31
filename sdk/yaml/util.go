@@ -60,21 +60,13 @@ func posGreaterThen(p1, p2 protocol.Position) bool {
 
 // Returns true if p1 > p2
 func posLessThen(p1, p2 protocol.Position) bool {
-	return p1 != p2 && posGreaterThen(p2, p1)
+	return p1 != p2 && !posGreaterThen(p2, p1)
 }
 
 func combineRange(lower, upper protocol.Range) protocol.Range {
 	return protocol.Range{
 		Start: lower.Start,
 		End:   upper.End,
-	}
-}
-
-func combineHCLRange(lower, upper *hcl.Range) *hcl.Range {
-	return &hcl.Range{
-		Filename: lower.Filename,
-		Start:    lower.Start,
-		End:      upper.End,
 	}
 }
 
@@ -90,8 +82,6 @@ func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.
 		v = version.String()
 	}
 	l.c.LogInfof("Loading package (%s,%s) ", pkg, v)
-	l.m.Lock()
-	defer l.m.Unlock()
 	load, err := l.inner.LoadPackage(pkg, version)
 	if err == nil {
 		l.c.LogInfof("Successfully loaded pkg (%s,%s)", pkg, v)

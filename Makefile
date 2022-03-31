@@ -11,10 +11,13 @@ lsp-server:
 	${GO} build -o ./bin -p ${CONCURRENCY} ./cmd/...
 
 vscode-client:
-	cd client && npm run compile
+	cd client && npm install && npm run compile
 
 install: build
 	${GO} install ./cmd/...
 
 clean:
 	rm -r ./bin client/node_modules
+
+test:
+	go test ./...

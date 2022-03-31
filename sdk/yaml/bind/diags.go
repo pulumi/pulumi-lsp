@@ -96,7 +96,7 @@ func missingTokenDiag(pkg, tk string, loc *hcl.Range) *hcl.Diagnostic {
 func depreciatedDiag(item, msg string, loc *hcl.Range) *hcl.Diagnostic {
 	return &hcl.Diagnostic{
 		Severity: hcl.DiagWarning,
-		Summary:  fmt.Sprint("'%s' is depreciated"),
+		Summary:  fmt.Sprintf("'%s' is depreciated", item),
 		Detail:   msg,
 		Subject:  loc,
 	}

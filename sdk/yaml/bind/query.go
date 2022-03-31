@@ -41,6 +41,11 @@ func (d *Decl) GetResources(tk string) ([]Resource, error) {
 	return rs, nil
 }
 
+// Get all invokes used in the program.
+func (d *Decl) Invokes() []Invoke {
+	return derefList(mapKeys(d.invokes))
+}
+
 func (b *Decl) Diags() hcl.Diagnostics {
 	if b == nil {
 		return nil
@@ -65,4 +70,12 @@ func mapKeys[K comparable, V any](m map[K]V) []K {
 		i++
 	}
 	return arr
+}
+
+func derefList[T any](l []*T) []T {
+	ls := make([]T, len(l))
+	for i := range l {
+		ls[i] = *l[i]
+	}
+	return ls
 }

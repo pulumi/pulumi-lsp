@@ -106,22 +106,23 @@ func (s *server) didChange(client lsp.Client, params *protocol.DidChangeTextDocu
 func (s *server) hover(client lsp.Client, params *protocol.HoverParams) (*protocol.Hover, error) {
 	uri := params.TextDocument.URI
 	doc, ok := s.getDocument(uri)
+	pos := params.Position
 	if !ok {
 		return nil, fmt.Errorf("Could not find an opened document %s", uri.Filename())
 	}
 	if doc.analysis == nil {
 		panic("Need to implement wait mechanism for docs")
 	}
-	typ, location, err := doc.objectAtPoint(params.Position)
+	typ, err := doc.objectAtPoint(pos)
 	if err != nil {
 		client.LogErrorf(err.Error())
 		return nil, nil
 	}
 	if typ != nil {
-		client.LogDebugf("Found object '%#v' at %v", typ, location)
+		client.LogDebugf("Found object %#v at %#v", typ, pos)
 		return &protocol.Hover{
-			Contents: describeType(typ),
-			Range:    &location,
+			Contents: typ.Describe(),
+			Range:    typ.Range(),
 		}, nil
 	}
 	return nil, nil

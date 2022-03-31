@@ -13,7 +13,8 @@ writing [Pulumi YAML](https://github.com/pulumi/pulumi-yaml).
 - [X] Duplicate key errors
 
 ### Hover
-- [ ] Resource info on hover
+- [X] Resource info on hover
+- [ ] Invoke info on hover
 - [ ] Highlight the variable at point across the file
 
 ### Completion

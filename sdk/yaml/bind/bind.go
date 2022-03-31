@@ -93,6 +93,14 @@ type Invoke struct {
 	definition *schema.Function
 }
 
+func (f *Invoke) Expr() *ast.InvokeExpr {
+	return f.defined
+}
+
+func (f *Invoke) Schema() *schema.Function {
+	return f.definition
+}
+
 func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 	bound := &Decl{
 		variables:      map[string]*Variable{},
