@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/hashicorp/hcl/v2"
 	"go.lsp.dev/protocol"
@@ -23,26 +22,71 @@ type documentAnalysisPipeline struct {
 	cancel context.CancelFunc
 
 	// First stage, program is parsed
-	parsed     *ast.TemplateDecl
-	parseDiags syntax.Diagnostics
-	parsedCond *sync.Cond
+	parsed *step[Tuple[*ast.TemplateDecl, syntax.Diagnostics]]
 
 	// Then the program is analyzed
-	bound        *bind.Decl
-	boundErrDiag *syntax.Diagnostic
-	boundCond    *sync.Cond
+	bound *step[Tuple[*bind.Decl, *syntax.Diagnostic]]
 }
 
-// Wait for parsed to be populated, then return it. If the parsing fails, it is
-// still possible to return a nil pointer.
-func (d *documentAnalysisPipeline) GetParsed() *ast.TemplateDecl {
-	if d.parsed != nil {
-		return d.parsed
+type step[T any] struct {
+	// The returned data, once it is returned.
+	data T
+	// When this channel is closed, the computation has finished, we we can
+	// return the data.
+	done chan struct{}
+	// If this context is canceled, we return.
+	ctx context.Context
+}
+
+func (s *step[T]) TryGetResult() (T, bool) {
+	var t T
+	select {
+	case _, _ = <-s.done:
+		return s.data, true
+	case _, _ = <-s.ctx.Done():
+		return t, false
+	default:
+		return t, false
 	}
-	d.parsedCond.L.Lock()
-	d.parsedCond.Wait()
-	d.parsedCond.L.Unlock()
-	return d.parsed
+}
+
+func (s *step[T]) GetResult() (T, bool) {
+	var t T
+	select {
+	case <-s.done:
+		return s.data, true
+	case <-s.ctx.Done():
+		return t, false
+	}
+}
+
+func NewStep[T any](ctx context.Context, f func() (T, bool)) *step[T] {
+	ctx, cancel := context.WithCancel(ctx)
+	s := &step[T]{
+		ctx:  ctx,
+		done: make(chan struct{}),
+	}
+	go func() {
+		var ok bool
+		s.data, ok = f()
+		if !ok {
+			cancel()
+		} else {
+			close(s.done)
+		}
+	}()
+	return s
+}
+
+func StepThen[T any, U any](s *step[T], f func(T) (U, bool)) *step[U] {
+	return NewStep(s.ctx, func() (U, bool) {
+		var u U
+		t, ok := s.GetResult()
+		if !ok {
+			return u, false
+		}
+		return f(t)
+	})
 }
 
 func (d *documentAnalysisPipeline) isDone() bool {
@@ -57,98 +101,88 @@ func (d *documentAnalysisPipeline) isDone() bool {
 // Parse the document
 func (d *documentAnalysisPipeline) parse(text lsp.Document) {
 	// This is the first step of analysis, so we don't check for previous errors
-	var err error
-	d.parsed, d.parseDiags, err = yaml.LoadYAML(text.URI().Filename(), strings.NewReader(text.String()))
+	d.parsed = NewStep(d.ctx, func() (Tuple[*ast.TemplateDecl, syntax.Diagnostics], bool) {
+		parsed, parseDiags, err := yaml.LoadYAML(text.URI().Filename(), strings.NewReader(text.String()))
+		if err != nil {
+			parseDiags = append(parseDiags, d.promoteError("Parse error", err))
+		} else if d.parsed == nil {
+			parseDiags = append(parseDiags, d.promoteError("Parse error", fmt.Errorf("No template returned")))
+		}
+		return Tuple[*ast.TemplateDecl, syntax.Diagnostics]{parsed, parseDiags}, true
+	})
+}
+
+func (d *documentAnalysisPipeline) bind(t Tuple[*ast.TemplateDecl, syntax.Diagnostics]) (Tuple[*bind.Decl, *syntax.Diagnostic], bool) {
+	if t.A == nil {
+		return Tuple[*bind.Decl, *syntax.Diagnostic]{}, false
+	}
+	bound, err := bind.NewDecl(t.A)
+	var hclErr *hcl.Diagnostic
 	if err != nil {
-		d.parseDiags = append(d.parseDiags, d.promoteError("Parse error", err))
-		d.cancel()
-	} else if d.parsed == nil {
-		d.parseDiags = append(d.parseDiags, d.promoteError("Parse error", fmt.Errorf("No template returned")))
-		d.cancel()
+		hclErr = d.promoteError("Binding error", err)
 	}
-	d.parsedCond.Broadcast()
-}
-
-func (d *documentAnalysisPipeline) bind() {
-	var err error
-	d.bound, err = bind.NewDecl(d.parsed)
-	if err != nil {
-		d.boundErrDiag = d.promoteError("Binding error", err)
-	}
-	d.boundCond.Broadcast()
-}
-
-// Wait for bound to be populated, then return it. If the binding fails, it is
-// still possible to return a nil pointer.
-func (d *documentAnalysisPipeline) GetBound() *bind.Decl {
-	if d.bound != nil {
-		return d.bound
-	}
-	d.boundCond.L.Lock()
-	d.boundCond.Wait()
-	d.boundCond.L.Unlock()
-	return d.bound
-}
-
-func (d *documentAnalysisPipeline) schematize(l schema.Loader) {
-	d.bound.LoadSchema(l)
+	return Tuple[*bind.Decl, *syntax.Diagnostic]{bound, hclErr}, true
 }
 
 // Creates a new asynchronous analysis pipeline, returning a handle to the process.
 func NewDocumentAnalysisPipeline(c lsp.Client, text lsp.Document, loader schema.Loader) *documentAnalysisPipeline {
 	ctx, cancel := context.WithCancel(c.Context())
 	d := &documentAnalysisPipeline{
-		ctx:          ctx,
-		cancel:       cancel,
-		parsed:       nil,
-		parseDiags:   nil,
-		parsedCond:   sync.NewCond(&sync.Mutex{}),
-		bound:        nil,
-		boundErrDiag: nil,
-		boundCond:    sync.NewCond(&sync.Mutex{}),
+		ctx:    ctx,
+		cancel: cancel,
+		parsed: nil,
+		bound:  nil,
 	}
-
 	go func(c lsp.Client, text lsp.Document, loader schema.Loader) {
 		// We need to ensure everything finished when we exit
-		defer d.cancel()
-		free := func(cond *sync.Cond) {
-			cond.L.Lock()
-			cond.Broadcast()
-			cond.L.Unlock()
-		}
-		defer free(d.parsedCond)
-		defer free(d.boundCond)
+		defer cancel()
 		c.LogInfof("Kicking off analysis for %s", text.URI().Filename())
 
-		if d.isDone() {
-			return
-		}
 		d.parse(text)
-		d.sendDiags(c, text.URI())
+		StepThen(d.parsed, func(Tuple[*ast.TemplateDecl, syntax.Diagnostics]) (struct{}, bool) {
+			d.sendDiags(c, text.URI())
+			return struct{}{}, true
+		})
 
-		if d.isDone() {
-			return
-		}
-		d.bind()
-		d.sendDiags(c, text.URI())
+		d.bound = StepThen(d.parsed, d.bind)
+		StepThen(d.bound, func(Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
+			d.sendDiags(c, text.URI())
+			return struct{}{}, true
+		})
 
-		if d.isDone() {
-			return
-		}
-
-		d.schematize(loader)
-		d.sendDiags(c, text.URI())
+		schematize := StepThen(d.bound, func(t Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
+			if t.A != nil {
+				t.A.LoadSchema(loader)
+				return struct{}{}, true
+			}
+			return struct{}{}, false
+		})
+		lastDiag := StepThen(schematize, func(struct{}) (struct{}, bool) {
+			d.sendDiags(c, text.URI())
+			return struct{}{}, true
+		})
+		// This will block on `lastDiag`, which will finish only when the entire
+		// chain is finished. Blocking prevents the `cancel` from being called
+		// prematurely.
+		lastDiag.GetResult()
 	}(c, text, loader)
 	return d
 }
 
 func (d *documentAnalysisPipeline) diags() syntax.Diagnostics {
-	arr := d.parseDiags
-	if d.boundErrDiag != nil {
-		arr = append(arr, d.boundErrDiag)
+	var arr syntax.Diagnostics
+	parsed, ok := d.parsed.TryGetResult()
+	if ok && parsed.B != nil {
+		arr.Extend(parsed.B...)
 	}
-	if d.bound != nil {
-		arr = append(arr, d.bound.Diags()...)
+	bound, ok := d.bound.TryGetResult()
+	if ok {
+		if bound.B != nil {
+			arr = append(arr, bound.B)
+		}
+		if bound.A != nil {
+			arr = append(arr, bound.A.Diags()...)
+		}
 	}
 	return arr
 }

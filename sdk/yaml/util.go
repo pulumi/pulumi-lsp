@@ -90,3 +90,8 @@ func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.
 	}
 	return load, err
 }
+
+type Tuple[A any, B any] struct {
+	A A
+	B B
+}

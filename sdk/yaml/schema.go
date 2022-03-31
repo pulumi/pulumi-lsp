@@ -14,17 +14,27 @@ import (
 // there was a problem getting the object at point. If no object is found, all
 // zero values are returned.
 func (doc *document) objectAtPoint(pos protocol.Position) (Object, error) {
-	parsed := doc.analysis.GetParsed()
-	if parsed == nil {
-		return nil, fmt.Errorf("Could not get parsed schema")
+	parsed, ok := doc.analysis.parsed.GetResult()
+	if !ok {
+		return nil, fmt.Errorf("Could not get parsed schema: canceled")
 	}
-	for _, r := range parsed.Resources.Entries {
+	if parsed.A == nil {
+		return nil, fmt.Errorf("Could not get parsed schema: nil result")
+	}
+	for _, r := range parsed.A.Resources.Entries {
 		tk := r.Value.Type
 		keyRange := r.Key.Syntax().Syntax().Range()
 		valueRange := r.Value.Syntax().Syntax().Range()
 		if posInRange(tk.Syntax().Syntax().Range(), pos) {
 			tk := r.Value.Type.Value
-			res, err := doc.analysis.GetBound().GetResources(tk)
+			bound, ok := doc.analysis.bound.GetResult()
+			if !ok {
+				return nil, fmt.Errorf("Could not get bound schema: canceled")
+			}
+			if bound.A == nil {
+				return nil, fmt.Errorf("COuld not get bound schema: nil result")
+			}
+			res, err := bound.A.GetResources(tk)
 			if err != nil {
 				return nil, err
 			}
@@ -37,7 +47,15 @@ func (doc *document) objectAtPoint(pos protocol.Position) (Object, error) {
 			}, nil
 		}
 	}
-	for _, f := range doc.analysis.GetBound().Invokes() {
+	bound, ok := doc.analysis.bound.GetResult()
+	if !ok {
+		return nil, fmt.Errorf("Could not get bound schema: canceled")
+	}
+	if bound.A == nil {
+		return nil, fmt.Errorf("COuld not get bound schema: nil result")
+	}
+
+	for _, f := range bound.A.Invokes() {
 		tk := f.Expr().Token
 		if posInRange(tk.Syntax().Syntax().Range(), pos) {
 			return Invoke{
