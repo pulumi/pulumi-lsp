@@ -7,6 +7,7 @@ import (
 
 	"go.lsp.dev/protocol"
 
+	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 )
 
@@ -189,7 +190,7 @@ var writeResource = MakeIOWriter(func(w Writer, r *schema.Resource) {
 
 func writePropertyDescription(w Writer, prop *schema.Property) {
 	w("### %s\n", prop.Name)
-	w("**Type:** `%s`\n\n", prop.Type)
+	w("**Type:** `%s`\n\n", codegen.UnwrapType(prop.Type))
 	w("%s\n", prop.Comment)
 }
 

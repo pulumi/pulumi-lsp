@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
+	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 )
 
@@ -39,18 +40,162 @@ type Variable struct {
 }
 
 type Definition interface {
+	ResolvableType
 	DefinitionRange() *hcl.Range
 	isDefinition()
 }
 
 type Reference struct {
 	location *hcl.Range
-	access   []ast.PropertyAccessor
+	access   PropertyAccessorList
+}
+
+type PropertyAccessorList []PropertyAccessor
+
+// TODO: Unify Tuple into a global util package
+type Tuple[A any, B any] struct {
+	A A
+	B B
+}
+
+// Compute out the type chain as long as possible.
+func (l PropertyAccessorList) Typed(root schema.Type) ([]schema.Type, *hcl.Diagnostic) {
+	types := make([]schema.Type, len(l))
+	handleProperties := func(tag string, props []*schema.Property, parent schema.Type, rnge *hcl.Range) (*schema.Property, *hcl.Diagnostic) {
+		existing := map[string]struct{}{}
+		for _, p := range props {
+			if p.Name == tag {
+				return p, nil
+			}
+			existing[p.Name] = struct{}{}
+		}
+		return nil, propertyDoesNotExistDiag(tag, parent, mapKeys(existing), rnge)
+	}
+
+	getStringTag := func(p ast.PropertyAccessor) string {
+		switch a := p.(type) {
+		case *ast.PropertyName:
+			return a.Name
+		case *ast.PropertySubscript:
+			switch a := a.Index.(type) {
+			case string:
+				return a
+			}
+		}
+		return ""
+	}
+	bail := func(diag *hcl.Diagnostic) ([]schema.Type, *hcl.Diagnostic) {
+		return types, diag
+	}
+	for i, prop := range l {
+		next := func(t schema.Type) {
+			types[i] = t
+			root = t
+		}
+		switch typ := codegen.UnwrapType(root).(type) {
+		case *schema.ArrayType:
+			if s, ok := prop.PropertyAccessor.(*ast.PropertySubscript); ok {
+				if _, ok := s.Index.(int); ok {
+					next(typ.ElementType)
+					continue
+				}
+				// TODO: specialize for map index
+				return bail(noPropertyAccessDiag(typ.String(), prop.rnge))
+			}
+			return bail(noPropertyAccessDiag(typ.String(), prop.rnge))
+
+		case *schema.MapType:
+			switch a := prop.PropertyAccessor.(type) {
+			case *ast.PropertySubscript:
+				_, name := a.Index.(string)
+				if name {
+					next(typ.ElementType)
+					continue
+				}
+				return types, noPropertyIndexDiag(typ.String(), prop.rnge)
+			case *ast.PropertyName:
+				next(typ.ElementType)
+				continue
+			}
+
+		case *schema.ResourceType:
+			r := typ.Resource
+			tag := getStringTag(prop.PropertyAccessor)
+			if tag == "" {
+				return bail(noPropertyIndexDiag(typ.String(), prop.rnge))
+			}
+			prop, diag := handleProperties(tag, append(r.Properties, r.InputProperties...), typ, prop.rnge)
+			if diag != nil {
+				return bail(diag)
+			}
+			next(prop.Type)
+
+		case *schema.ObjectType:
+			tag := getStringTag(prop.PropertyAccessor)
+			if tag == "" {
+				return bail(noPropertyIndexDiag(typ.String(), prop.rnge))
+			}
+			prop, diag := handleProperties(tag, typ.Properties, typ, prop.rnge)
+			if diag != nil {
+				return bail(diag)
+			}
+			next(prop.Type)
+		}
+	}
+	return types, nil
+}
+
+type PropertyAccessor struct {
+	ast.PropertyAccessor
+
+	rnge *hcl.Range
 }
 
 func (b *Decl) newRefernce(variable string, loc *hcl.Range, accessor []ast.PropertyAccessor) {
 	v, ok := b.variables[variable]
-	ref := Reference{location: loc, access: accessor}
+	// Name is used for the initial offset
+	var l []PropertyAccessor
+	// 2 for the ${
+	offsetByte := len(variable) + loc.Start.Byte + 1
+	offsetChar := len(variable) + loc.Start.Column + 1
+	for _, a := range accessor {
+		length := 0
+		switch a := a.(type) {
+		case *ast.PropertyName:
+			length = len(a.Name) + 1 // 1 for the .
+		case *ast.PropertySubscript:
+			switch a := a.Index.(type) {
+			case string:
+				length = len(a) + 4 // 2 quotes, 2 brackets
+			case int:
+				length = len(fmt.Sprintf("%d", a)) + 2 // 2 brackets
+			}
+		}
+		aRange := loc
+		if line := loc.Start.Line; line == loc.End.Line {
+			start := hcl.Pos{
+				Line:   line,
+				Column: offsetChar,
+				Byte:   offsetByte,
+			}
+			aRange = &hcl.Range{
+				Filename: loc.Filename,
+				Start:    start,
+				End: hcl.Pos{
+					Line:   line,
+					Column: offsetChar + length,
+					Byte:   offsetByte + length,
+				},
+			}
+			offsetByte += length
+			offsetChar += length
+		}
+		l = append(l, PropertyAccessor{
+			PropertyAccessor: a,
+			rnge:             aRange,
+		})
+	}
+	ref := Reference{location: loc, access: l}
 	if ok {
 		v.uses = append(v.uses, ref)
 	} else {
@@ -67,6 +212,12 @@ type Resource struct {
 func (r *Resource) isDefinition() {}
 func (r *Resource) DefinitionRange() *hcl.Range {
 	return r.defined.Key.Syntax().Syntax().Range()
+}
+func (r *Resource) ResolveType(*Decl) schema.Type {
+	return &schema.ResourceType{
+		Token:    r.token,
+		Resource: r.definition,
+	}
 }
 
 func (r *Resource) Schema() *schema.Resource {
@@ -85,6 +236,25 @@ type ConfigMapEntry struct{ ast.ConfigMapEntry }
 func (c *ConfigMapEntry) isDefinition() {}
 func (c *ConfigMapEntry) DefinitionRange() *hcl.Range {
 	return c.Key.Syntax().Syntax().Range()
+}
+
+type ResolvableType interface {
+	ResolveType(*Decl) schema.Type
+}
+
+func (c *ConfigMapEntry) ResolveType(*Decl) schema.Type {
+	switch c.Value.Type.Value {
+	case "string":
+		return schema.StringType
+	case "int":
+		return schema.IntType
+	default:
+		return nil
+	}
+}
+
+func (v *VariableMapEntry) ResolveType(d *Decl) schema.Type {
+	return d.typeExpr(v.Value)
 }
 
 type Invoke struct {

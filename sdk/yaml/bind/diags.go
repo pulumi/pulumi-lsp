@@ -5,6 +5,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
+	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 )
 
 func propertyStartsWithIndexDiag(p *ast.PropertyAccess, loc *hcl.Range) *hcl.Diagnostic {
@@ -41,6 +42,35 @@ func variableDoesNotExistDiag(name string, use Reference) *hcl.Diagnostic {
 		Summary:  fmt.Sprintf("Missing variable '%s'", name),
 		Detail:   fmt.Sprintf("Reference to non-existant variable '%[1]s'. Consider adding a '%[1]s' to the variables section.", name),
 		Subject:  use.location,
+	}
+}
+
+func propertyDoesNotExistDiag(prop string, parent schema.Type, suggestedProps []string, loc *hcl.Range) *hcl.Diagnostic {
+	var detail string
+	if len(suggestedProps) > 1 {
+		detail = fmt.Sprintf("Existing fields include %v", suggestedProps)
+	}
+	return &hcl.Diagnostic{
+		Severity: hcl.DiagError,
+		Summary:  fmt.Sprintf("Property '%s' does not exist on %s", prop, parent),
+		Detail:   detail,
+		Subject:  loc,
+	}
+}
+
+func noPropertyAccessDiag(typ string, loc *hcl.Range) *hcl.Diagnostic {
+	return &hcl.Diagnostic{
+		Severity: hcl.DiagError,
+		Summary:  fmt.Sprintf("Property access not supported for %s", typ),
+		Subject:  loc,
+	}
+}
+
+func noPropertyIndexDiag(typ string, loc *hcl.Range) *hcl.Diagnostic {
+	return &hcl.Diagnostic{
+		Severity: hcl.DiagError,
+		Summary:  fmt.Sprintf("Indexing not supported for %s", typ),
+		Subject:  loc,
 	}
 }
 
