@@ -14,6 +14,8 @@ import (
 // The schemas are cached internally to make searching faster.
 // New diagnostics are appended to the internal diag list.
 func (d *Decl) LoadSchema(loader schema.Loader) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 	for invoke := range d.invokes {
 		typeLoc := invoke.defined.Token.Syntax().Syntax().Range()
 		pkgName := d.loadPackage(invoke.token, loader,
@@ -41,7 +43,7 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 	}
 
 	for _, v := range d.variables {
-		if resource, ok := v.definition.(Resource); ok {
+		if resource, ok := v.definition.(*Resource); ok {
 			typeLoc := resource.defined.Value.Type.Syntax().Syntax().Range()
 			pkgName := d.loadPackage(resource.token, loader, typeLoc)
 			if pkgName != "" {

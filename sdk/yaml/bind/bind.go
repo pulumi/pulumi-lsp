@@ -8,6 +8,7 @@ package bind
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/hashicorp/hcl/v2"
 
@@ -27,12 +28,19 @@ type Decl struct {
 	diags hcl.Diagnostics
 
 	loadedPackages map[string]pkgCache
+
+	lock *sync.RWMutex
 }
 
 type Variable struct {
 	// definition is either a Resource, *ast.ConfigParamDecl
-	definition interface{}
+	definition Definition
 	uses       []Reference
+}
+
+type Definition interface {
+	DefinitionRange() *hcl.Range
+	isDefinition()
 }
 
 type Reference struct {
@@ -50,27 +58,33 @@ func (b *Decl) newRefernce(variable string, loc *hcl.Range, accessor []ast.Prope
 	}
 }
 
-func (v *Variable) definitionRange() *hcl.Range {
-	switch d := v.definition.(type) {
-	case ast.ConfigMapEntry:
-		return d.Key.Syntax().Syntax().Range()
-	case ast.VariablesMapEntry:
-		return d.Key.Syntax().Syntax().Range()
-	case Resource:
-		return d.defined.Key.Syntax().Syntax().Range()
-	default:
-		panic(fmt.Errorf("Unexpected variable type %T", d))
-	}
-}
-
 type Resource struct {
 	token      string
 	defined    *ast.ResourcesMapEntry
 	definition *schema.Resource
 }
 
+func (r *Resource) isDefinition() {}
+func (r *Resource) DefinitionRange() *hcl.Range {
+	return r.defined.Key.Syntax().Syntax().Range()
+}
+
 func (r *Resource) Schema() *schema.Resource {
 	return r.definition
+}
+
+type VariableMapEntry struct{ ast.VariablesMapEntry }
+
+func (r *VariableMapEntry) isDefinition() {}
+func (v *VariableMapEntry) DefinitionRange() *hcl.Range {
+	return v.Key.Syntax().Syntax().Range()
+}
+
+type ConfigMapEntry struct{ ast.ConfigMapEntry }
+
+func (c *ConfigMapEntry) isDefinition() {}
+func (c *ConfigMapEntry) DefinitionRange() *hcl.Range {
+	return c.Key.Syntax().Syntax().Range()
 }
 
 type Invoke struct {
@@ -80,7 +94,14 @@ type Invoke struct {
 }
 
 func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
-	bound := &Decl{map[string]*Variable{}, map[string]ast.PropertyMapEntry{}, map[*Invoke]struct{}{}, hcl.Diagnostics{}, map[string]pkgCache{}}
+	bound := &Decl{
+		variables:      map[string]*Variable{},
+		outputs:        map[string]ast.PropertyMapEntry{},
+		invokes:        map[*Invoke]struct{}{},
+		diags:          hcl.Diagnostics{},
+		loadedPackages: map[string]pkgCache{},
+		lock:           &sync.RWMutex{},
+	}
 
 	for _, c := range decl.Configuration.Entries {
 		other, alreadyReferenced := bound.variables[c.Key.Value]
@@ -88,12 +109,12 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 			bound.diags = bound.diags.Append(
 				duplicateSourceDiag(c.Key.Value,
 					c.Key.Syntax().Syntax().Range(),
-					other.definitionRange(),
+					other.definition.DefinitionRange(),
 				),
 			)
 		} else {
 			bound.variables[c.Key.Value] = &Variable{
-				definition: c,
+				definition: &ConfigMapEntry{c},
 			}
 		}
 	}
@@ -103,12 +124,12 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 			bound.diags = bound.diags.Append(
 				duplicateSourceDiag(v.Key.Value,
 					v.Key.Syntax().Syntax().Range(),
-					other.definitionRange(),
+					other.definition.DefinitionRange(),
 				),
 			)
 		} else {
 			bound.variables[v.Key.Value] = &Variable{
-				definition: v,
+				definition: &VariableMapEntry{v},
 			}
 			err := bound.bind(v.Value)
 			if err != nil {
@@ -122,7 +143,7 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 			bound.diags = bound.diags.Append(
 				duplicateSourceDiag(r.Key.Value,
 					r.Key.Syntax().Syntax().Range(),
-					other.definitionRange(),
+					other.definition.DefinitionRange(),
 				),
 			)
 		} else {
@@ -161,7 +182,7 @@ func (b *Decl) analyzeBindings() error {
 			}
 		}
 		if len(v.uses) == 0 {
-			b.diags = append(b.diags, unusedVariableDiag(name, v.definitionRange()))
+			b.diags = append(b.diags, unusedVariableDiag(name, v.definition.DefinitionRange()))
 		}
 	}
 	return nil
@@ -296,9 +317,9 @@ func (b *Decl) bindResource(r *ast.ResourcesMapEntry) error {
 			duplicateSourceDiag(
 				r.Key.Value,
 				r.Key.Syntax().Syntax().Range(),
-				other.definitionRange()))
+				other.definition.DefinitionRange()))
 	} else {
-		b.variables[r.Key.Value] = &Variable{definition: res}
+		b.variables[r.Key.Value] = &Variable{definition: &res}
 	}
 	return nil
 }

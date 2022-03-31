@@ -114,11 +114,11 @@ func (s *server) hover(client lsp.Client, params *protocol.HoverParams) (*protoc
 	}
 	typ, location, err := doc.objectAtPoint(params.Position)
 	if err != nil {
-		return nil, fmt.Errorf("Could not find a object at point %v", params.Position)
-	} else {
-		client.LogInfof("Could not find an object to hover over at %v in %s", params.Position, uri.Filename())
+		client.LogErrorf(err.Error())
+		return nil, nil
 	}
 	if typ != nil {
+		client.LogDebugf("Found object '%#v' at %v", typ, location)
 		return &protocol.Hover{
 			Contents: describeType(typ),
 			Range:    &location,

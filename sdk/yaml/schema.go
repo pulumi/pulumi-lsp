@@ -22,7 +22,7 @@ func (s *document) objectAtPoint(pos protocol.Position) (schema.Type, protocol.R
 				return nil, protocol.Range{}, err
 			}
 			if len(res) == 0 {
-				return nil, protocol.Range{}, fmt.Errorf("Could not find a valid resource with token '%s'", tk)
+				return nil, protocol.Range{}, nil
 			}
 			return &schema.ResourceType{
 				Token:    tk,
