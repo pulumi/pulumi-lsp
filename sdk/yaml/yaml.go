@@ -1,7 +1,6 @@
 package yaml
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
@@ -27,10 +26,11 @@ func Methods(host plugin.Host) *lsp.Methods {
 		loaderMx: &sync.Mutex{},
 	}
 	return lsp.Methods{
-		DidOpenFunc:   server.didOpen,
-		DidCloseFunc:  server.didClose,
-		DidChangeFunc: server.didChange,
-		HoverFunc:     server.hover,
+		DidOpenFunc:    server.didOpen,
+		DidCloseFunc:   server.didClose,
+		DidChangeFunc:  server.didChange,
+		HoverFunc:      server.hover,
+		CompletionFunc: server.completion,
 	}.DefaultInitializer("pulumi-lsp", "0.1.0")
 }
 
@@ -63,11 +63,8 @@ func (d *document) process(c lsp.Client) {
 	if d.analysis != nil {
 		d.analysis.cancel()
 	}
-	pipe := &documentAnalysisPipeline{}
-	pipe.ctx, pipe.cancel = context.WithCancel(c.Context())
-	d.analysis = pipe
 	loader := d.server.GetLoader(c)
-	go pipe.kickoff(c, d.text, loader)
+	d.analysis = NewDocumentAnalysisPipeline(c, d.text, loader)
 }
 
 func (s *server) didOpen(client lsp.Client, params *protocol.DidOpenTextDocumentParams) error {
@@ -126,4 +123,31 @@ func (s *server) hover(client lsp.Client, params *protocol.HoverParams) (*protoc
 		}, nil
 	}
 	return nil, nil
+}
+
+func (s *server) completion(client lsp.Client, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
+	client.LogWarningf("Completion called")
+	uri := params.TextDocument.URI
+	doc, ok := s.getDocument(uri)
+	if !ok {
+		return nil, fmt.Errorf("Could not find an opened document %s", uri.Filename())
+	}
+	_, err := doc.objectAtPoint(params.Position)
+	if err != nil {
+		client.LogErrorf(err.Error())
+		return nil, nil
+	}
+	return &protocol.CompletionList{
+		IsIncomplete: false,
+		Items: []protocol.CompletionItem{{
+			Deprecated:       false,
+			Documentation:    "fubar",
+			Detail:           "foobarr",
+			InsertTextFormat: protocol.InsertTextFormatPlainText,
+			InsertTextMode:   protocol.InsertTextModeAsIs,
+			Kind:             protocol.CompletionItemKindFunction,
+			Label:            "Foo",
+			Preselect:        true,
+		}},
+	}, nil
 }

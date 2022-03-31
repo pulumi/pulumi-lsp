@@ -86,7 +86,7 @@ func (m Methods) DefaultInitializer(name, version string) *Methods {
 		if m.CompletionFunc != nil || m.CompletionResolveFunc != nil {
 			completion = &protocol.CompletionOptions{
 				ResolveProvider:   m.CompletionResolveFunc != nil,
-				TriggerCharacters: []string{".", "::"}, // TODO: How should this be provided
+				TriggerCharacters: []string{":"}, // TODO: How should this be provided
 			}
 		}
 		var hover *protocol.HoverOptions

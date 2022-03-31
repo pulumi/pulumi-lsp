@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/hashicorp/hcl/v2"
 	"go.lsp.dev/protocol"
@@ -24,9 +25,24 @@ type documentAnalysisPipeline struct {
 	// First stage, program is parsed
 	parsed     *ast.TemplateDecl
 	parseDiags syntax.Diagnostics
+	parsedCond *sync.Cond
+
 	// Then the program is analyzed
-	bound       *bind.Decl
-	bindErrDiag *syntax.Diagnostic
+	bound        *bind.Decl
+	boundErrDiag *syntax.Diagnostic
+	boundCond    *sync.Cond
+}
+
+// Wait for parsed to be populated, then return it. If the parsing fails, it is
+// still possible to return a nil pointer.
+func (d *documentAnalysisPipeline) GetParsed() *ast.TemplateDecl {
+	if d.parsed != nil {
+		return d.parsed
+	}
+	d.parsedCond.L.Lock()
+	d.parsedCond.Wait()
+	d.parsedCond.L.Unlock()
+	return d.parsed
 }
 
 func (d *documentAnalysisPipeline) isDone() bool {
@@ -50,55 +66,86 @@ func (d *documentAnalysisPipeline) parse(text lsp.Document) {
 		d.parseDiags = append(d.parseDiags, d.promoteError("Parse error", fmt.Errorf("No template returned")))
 		d.cancel()
 	}
+	d.parsedCond.Broadcast()
 }
 
 func (d *documentAnalysisPipeline) bind() {
 	var err error
 	d.bound, err = bind.NewDecl(d.parsed)
 	if err != nil {
-		d.bindErrDiag = d.promoteError("Binding error", err)
+		d.boundErrDiag = d.promoteError("Binding error", err)
 	}
+	d.boundCond.Broadcast()
+}
+
+// Wait for bound to be populated, then return it. If the binding fails, it is
+// still possible to return a nil pointer.
+func (d *documentAnalysisPipeline) GetBound() *bind.Decl {
+	if d.bound != nil {
+		return d.bound
+	}
+	d.boundCond.L.Lock()
+	d.boundCond.Wait()
+	d.boundCond.L.Unlock()
+	return d.bound
 }
 
 func (d *documentAnalysisPipeline) schematize(l schema.Loader) {
 	d.bound.LoadSchema(l)
 }
 
-// Runs the analysis pipeline.
-// Should always be called asynchronously.
-func (p *documentAnalysisPipeline) kickoff(c lsp.Client, text lsp.Document, loader schema.Loader) {
-	defer p.cancel()
-	// We are resetting the analysis pipeline
-	c.LogInfof("Kicking off analysis for %s", text.URI().Filename())
-	p.bindErrDiag = nil
-	p.bound = nil
-	p.parseDiags = nil
-	p.parsed = nil
-
-	if p.isDone() {
-		return
-	}
-	p.parse(text)
-	p.sendDiags(c, text.URI())
-
-	if p.isDone() {
-		return
-	}
-	p.bind()
-	p.sendDiags(c, text.URI())
-
-	if p.isDone() {
-		return
+// Creates a new asynchronous analysis pipeline, returning a handle to the process.
+func NewDocumentAnalysisPipeline(c lsp.Client, text lsp.Document, loader schema.Loader) *documentAnalysisPipeline {
+	ctx, cancel := context.WithCancel(c.Context())
+	d := &documentAnalysisPipeline{
+		ctx:          ctx,
+		cancel:       cancel,
+		parsed:       nil,
+		parseDiags:   nil,
+		parsedCond:   sync.NewCond(&sync.Mutex{}),
+		bound:        nil,
+		boundErrDiag: nil,
+		boundCond:    sync.NewCond(&sync.Mutex{}),
 	}
 
-	p.schematize(loader)
-	p.sendDiags(c, text.URI())
+	go func(c lsp.Client, text lsp.Document, loader schema.Loader) {
+		// We need to ensure everything finished when we exit
+		defer d.cancel()
+		free := func(cond *sync.Cond) {
+			cond.L.Lock()
+			cond.Broadcast()
+			cond.L.Unlock()
+		}
+		defer free(d.parsedCond)
+		defer free(d.boundCond)
+		c.LogInfof("Kicking off analysis for %s", text.URI().Filename())
+
+		if d.isDone() {
+			return
+		}
+		d.parse(text)
+		d.sendDiags(c, text.URI())
+
+		if d.isDone() {
+			return
+		}
+		d.bind()
+		d.sendDiags(c, text.URI())
+
+		if d.isDone() {
+			return
+		}
+
+		d.schematize(loader)
+		d.sendDiags(c, text.URI())
+	}(c, text, loader)
+	return d
 }
 
 func (d *documentAnalysisPipeline) diags() syntax.Diagnostics {
 	arr := d.parseDiags
-	if d.bindErrDiag != nil {
-		arr = append(arr, d.bindErrDiag)
+	if d.boundErrDiag != nil {
+		arr = append(arr, d.boundErrDiag)
 	}
 	if d.bound != nil {
 		arr = append(arr, d.bound.Diags()...)

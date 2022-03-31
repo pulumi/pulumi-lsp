@@ -13,14 +13,18 @@ import (
 // Find the object at point, as well as it's location. An error indicates that
 // there was a problem getting the object at point. If no object is found, all
 // zero values are returned.
-func (s *document) objectAtPoint(pos protocol.Position) (Object, error) {
-	for _, r := range s.analysis.parsed.Resources.Entries {
+func (doc *document) objectAtPoint(pos protocol.Position) (Object, error) {
+	parsed := doc.analysis.GetParsed()
+	if parsed == nil {
+		return nil, fmt.Errorf("Could not get parsed schema")
+	}
+	for _, r := range parsed.Resources.Entries {
 		tk := r.Value.Type
 		keyRange := r.Key.Syntax().Syntax().Range()
 		valueRange := r.Value.Syntax().Syntax().Range()
 		if posInRange(tk.Syntax().Syntax().Range(), pos) {
 			tk := r.Value.Type.Value
-			res, err := s.analysis.bound.GetResources(tk)
+			res, err := doc.analysis.GetBound().GetResources(tk)
 			if err != nil {
 				return nil, err
 			}
@@ -33,7 +37,7 @@ func (s *document) objectAtPoint(pos protocol.Position) (Object, error) {
 			}, nil
 		}
 	}
-	for _, f := range s.analysis.bound.Invokes() {
+	for _, f := range doc.analysis.GetBound().Invokes() {
 		tk := f.Expr().Token
 		if posInRange(tk.Syntax().Syntax().Range(), pos) {
 			return Invoke{
