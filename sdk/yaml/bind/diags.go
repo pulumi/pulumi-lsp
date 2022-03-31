@@ -45,7 +45,7 @@ func variableDoesNotExistDiag(name string, use Reference) *hcl.Diagnostic {
 	}
 }
 
-func propertyDoesNotExistDiag(prop string, parent schema.Type, suggestedProps []string, loc *hcl.Range) *hcl.Diagnostic {
+func propertyDoesNotExistDiag(prop, parent string, suggestedProps []string, loc *hcl.Range) *hcl.Diagnostic {
 	var detail string
 	if len(suggestedProps) > 1 {
 		detail = fmt.Sprintf("Existing fields include %v", suggestedProps)
@@ -136,6 +136,14 @@ func emptyPropertyAccessDiag(loc *hcl.Range) *hcl.Diagnostic {
 	return &hcl.Diagnostic{
 		Severity: hcl.DiagError,
 		Summary:  "Empty interpolate expressions are not allowed",
+		Subject:  loc,
+	}
+}
+
+func missingRequiredPropDiag(prop *schema.Property, loc *hcl.Range) *hcl.Diagnostic {
+	return &hcl.Diagnostic{
+		Summary:  fmt.Sprintf("Missing required property '%s'", prop.Name),
+		Severity: hcl.DiagError,
 		Subject:  loc,
 	}
 }

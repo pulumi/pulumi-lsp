@@ -70,10 +70,16 @@ func combineRange(lower, upper protocol.Range) protocol.Range {
 	}
 }
 
-type SchemaLoader struct {
+type SchemaCache struct {
 	inner schema.Loader
 	c     lsp.Client
 	m     *sync.Mutex
+	cache map[Tuple[string, string]]*schema.Package
+}
+
+type SchemaLoader struct {
+	cache *SchemaCache
+	c     lsp.Client
 }
 
 func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.Package, error) {
@@ -82,11 +88,22 @@ func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.
 		v = version.String()
 	}
 	l.c.LogInfof("Loading package (%s,%s) ", pkg, v)
-	load, err := l.inner.LoadPackage(pkg, version)
-	if err == nil {
-		l.c.LogInfof("Successfully loaded pkg (%s,%s)", pkg, v)
+	load, ok := l.cache.cache[Tuple[string, string]{pkg, v}]
+	var err error
+	if ok {
+		l.c.LogErrorf("Returning cached pkg (%s,%s)", pkg, v)
 	} else {
-		l.c.LogErrorf("Failed to load pkg (%s,%s): %s", pkg, v, err.Error())
+		func() {
+			l.cache.m.Lock()
+			defer l.cache.m.Unlock()
+			load, err = l.cache.inner.LoadPackage(pkg, version)
+		}()
+		if err == nil {
+			l.c.LogInfof("Successfully loaded pkg (%s,%s)", pkg, v)
+			l.cache.cache[Tuple[string, string]{pkg, v}] = load
+		} else {
+			l.c.LogErrorf("Failed to load pkg (%s,%s): %s", pkg, v, err.Error())
+		}
 	}
 	return load, err
 }

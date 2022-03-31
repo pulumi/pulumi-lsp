@@ -90,7 +90,7 @@ func (l PropertyAccessorList) Typed(root schema.Type) ([]schema.Type, *hcl.Diagn
 			}
 			existing[p.Name] = struct{}{}
 		}
-		return nil, propertyDoesNotExistDiag(tag, parent, mapKeys(existing), rnge)
+		return nil, propertyDoesNotExistDiag(tag, parent.String(), mapKeys(existing), rnge)
 	}
 
 	getStringTag := func(p ast.PropertyAccessor) string {

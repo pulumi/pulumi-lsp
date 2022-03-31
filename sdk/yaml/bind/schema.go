@@ -37,19 +37,28 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 					d.diags = d.diags.Extend(f.diag(typeLoc))
 				}
 				invoke.definition = f.Function
+				d.validateProperties(mapSlice(invoke.defined.CallArgs.Entries, func(o ast.ObjectProperty) MapKey {
+					return MapKey{o.Key.(*ast.StringExpr).Value, o.Key.Syntax().Syntax().Range()}
+				}), f.Function.Inputs.Properties, f.Token,
+					invoke.defined.CallArgs.Syntax().Syntax().Range())
 				if ret := invoke.defined.Return; ret != nil {
 					if out := f.Function.Outputs; out != nil {
 						var valid bool
-						existing := map[string]struct{}{}
+						existing := map[string]bool{}
 						for _, prop := range out.Properties {
 							if prop.Name == ret.Value {
 								valid = true
 								break
 							}
-							existing[prop.Name] = struct{}{}
+							existing[prop.Name] = true
 						}
 						if !valid {
-							d.diags = append(d.diags, propertyDoesNotExistDiag(ret.Value, out, mapKeys(existing), ret.Syntax().Syntax().Range()))
+							d.diags = append(d.diags,
+								propertyDoesNotExistDiag(
+									ret.Value,
+									out.String(),
+									mapKeys(existing),
+									ret.Syntax().Syntax().Range()))
 						}
 					}
 				}
@@ -79,6 +88,13 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 						d.diags = d.diags.Extend(f.diag(typeLoc))
 					}
 					resource.definition = f.Resource
+					d.validateProperties(mapSlice(resource.defined.Value.Properties.Entries, func(m ast.PropertyMapEntry) MapKey {
+						return MapKey{m.Key.Value, m.Key.Syntax().Syntax().Range()}
+					}),
+						f.Resource.InputProperties, (&schema.ResourceType{
+							Token:    f.Resource.Token,
+							Resource: f.Resource,
+						}).String(), typeLoc)
 				} else {
 					d.diags = append(d.diags, missingTokenDiag(pkgName, resource.token, typeLoc))
 				}
@@ -89,7 +105,45 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 	d.checkSchemaPropertyAccesses()
 }
 
-func (d Decl) typeExpr(e ast.Expr) schema.Type {
+type MapKey struct {
+	tag  string
+	rnge *hcl.Range
+}
+
+func mapSlice[T any, U any](in []T, f func(T) U) []U {
+	l := make([]U, len(in))
+	for i, t := range in {
+		l[i] = f(t)
+	}
+	return l
+}
+
+// Applied appropriate diagnostics to a property map given a backing schema.
+// Location is the default value for a diagnostic, and is only used if a more
+// specific location is not possible.
+func (d *Decl) validateProperties(existing []MapKey, typed []*schema.Property, parent string, loc *hcl.Range) {
+	definedProps := map[string]bool{}
+	for _, prop := range existing {
+		definedProps[prop.tag] = true
+	}
+	resourceProps := map[string]bool{}
+	for _, prop := range typed {
+		resourceProps[prop.Name] = true
+		if prop.IsRequired() && !definedProps[prop.Name] {
+			// TODO: it would be good to put the error message on the
+			// properties tag, but that is not available.
+			d.diags = append(d.diags, missingRequiredPropDiag(prop, loc))
+		}
+	}
+	for _, prop := range existing {
+		if !resourceProps[prop.tag] {
+			d.diags = append(d.diags, propertyDoesNotExistDiag(prop.tag,
+				parent, mapKeys(resourceProps), prop.rnge))
+		}
+	}
+}
+
+func (d *Decl) typeExpr(e ast.Expr) schema.Type {
 	switch e := e.(type) {
 	// Primitive types: nothing to bind
 	case *ast.NullExpr:
@@ -107,7 +161,7 @@ func (d Decl) typeExpr(e ast.Expr) schema.Type {
 			tag = t.Name
 		}
 		if v, ok := d.variables[tag]; tag != "" && ok {
-			t := v.definition.ResolveType(&d)
+			t := v.definition.ResolveType(d)
 			if len(e.Property.Accessors) == 0 {
 				return t
 			}

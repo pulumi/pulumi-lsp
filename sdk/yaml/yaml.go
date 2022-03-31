@@ -16,15 +16,17 @@ import (
 type server struct {
 	docs map[protocol.DocumentURI]*document
 
-	loader   schema.Loader
-	loaderMx *sync.Mutex
+	loader *SchemaCache
 }
 
 func Methods(host plugin.Host) *lsp.Methods {
 	server := &server{
-		docs:     map[protocol.DocumentURI]*document{},
-		loader:   schema.NewPluginLoader(host),
-		loaderMx: &sync.Mutex{},
+		docs: map[protocol.DocumentURI]*document{},
+		loader: &SchemaCache{
+			inner: schema.NewPluginLoader(host),
+			m:     &sync.Mutex{},
+			cache: map[Tuple[string, string]]*schema.Package{},
+		},
 	}
 	return lsp.Methods{
 		DidOpenFunc:    server.didOpen,
@@ -56,8 +58,8 @@ type document struct {
 
 // Returns a loader. The cancel function must be called when done with the loader.
 func (s *server) GetLoader(c lsp.Client) schema.Loader {
-	contract.Assert(s.loaderMx != nil)
-	return SchemaLoader{s.loader, c, s.loaderMx}
+	contract.Assert(s.loader.m != nil)
+	return SchemaLoader{s.loader, c}
 }
 
 func (d *document) process(c lsp.Client) {
