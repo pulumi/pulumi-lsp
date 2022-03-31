@@ -7,6 +7,7 @@ import (
 	"go.lsp.dev/protocol"
 
 	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
+	"github.com/iwahbe/pulumi-lsp/sdk/yaml/bind"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
@@ -116,11 +117,12 @@ func (s *server) hover(client lsp.Client, params *protocol.HoverParams) (*protoc
 		return nil, nil
 	}
 	if typ != nil {
-		client.LogDebugf("Found object %#v at %#v", typ, pos)
-		return &protocol.Hover{
-			Contents: typ.Describe(),
-			Range:    typ.Range(),
-		}, nil
+		if description, ok := typ.Describe(); ok {
+			return &protocol.Hover{
+				Contents: description,
+				Range:    typ.Range(),
+			}, nil
+		}
 	}
 	return nil, nil
 }
@@ -132,22 +134,36 @@ func (s *server) completion(client lsp.Client, params *protocol.CompletionParams
 	if !ok {
 		return nil, fmt.Errorf("Could not find an opened document %s", uri.Filename())
 	}
-	_, err := doc.objectAtPoint(params.Position)
+	o, err := doc.objectAtPoint(params.Position)
 	if err != nil {
 		client.LogErrorf(err.Error())
 		return nil, nil
 	}
-	return &protocol.CompletionList{
-		IsIncomplete: false,
-		Items: []protocol.CompletionItem{{
-			Deprecated:       false,
-			Documentation:    "fubar",
-			Detail:           "foobarr",
-			InsertTextFormat: protocol.InsertTextFormatPlainText,
-			InsertTextMode:   protocol.InsertTextModeAsIs,
-			Kind:             protocol.CompletionItemKindFunction,
-			Label:            "Foo",
-			Preselect:        true,
-		}},
-	}, nil
+	client.LogInfof("Object found for completion: %v", o)
+	if o, ok := o.(*Reference); ok {
+		ref, err := doc.text.Window(*o.Range())
+		if err != nil {
+			return nil, err
+		}
+		// We are binding a ref that doesn't have an associated variable,
+		b, ok := doc.analysis.bound.GetResult()
+		contract.Assertf(ok, "Should have exited already if the bind task failed")
+		list := []protocol.CompletionItem{}
+		for k, v := range b.A.Variables() {
+			kind := protocol.CompletionItemKindVariable
+			if _, ok := v.Source().(*bind.Resource); ok {
+				kind = protocol.CompletionItemKindClass
+			}
+			list = append(list, protocol.CompletionItem{
+				CommitCharacters: []string{"."},
+				InsertTextFormat: protocol.InsertTextFormatPlainText,
+				InsertTextMode:   protocol.InsertTextModeAsIs,
+				Kind:             kind,
+				Label:            k,
+				Detail:           ref,
+			})
+		}
+		return &protocol.CompletionList{Items: list}, nil
+	}
+	return nil, nil
 }

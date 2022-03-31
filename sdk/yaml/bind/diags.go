@@ -131,3 +131,11 @@ func depreciatedDiag(item, msg string, loc *hcl.Range) *hcl.Diagnostic {
 		Subject:  loc,
 	}
 }
+
+func emptyPropertyAccessDiag(loc *hcl.Range) *hcl.Diagnostic {
+	return &hcl.Diagnostic{
+		Severity: hcl.DiagError,
+		Summary:  "Empty interpolate expressions are not allowed",
+		Subject:  loc,
+	}
+}

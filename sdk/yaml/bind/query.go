@@ -72,10 +72,32 @@ func mapKeys[K comparable, V any](m map[K]V) []K {
 	return arr
 }
 
+func mapValues[K comparable, V any](m map[K]V) []V {
+	arr := make([]V, len(m))
+	i := 0
+	for _, v := range m {
+		arr[i] = v
+		i++
+	}
+	return arr
+}
+
 func derefList[T any](l []*T) []T {
 	ls := make([]T, len(l))
 	for i := range l {
 		ls[i] = *l[i]
 	}
 	return ls
+}
+
+func (d *Decl) References() []Reference {
+	refs := []Reference{}
+	for _, v := range d.variables {
+		refs = append(refs, v.uses...)
+	}
+	return refs
+}
+
+func (d *Decl) Variables() map[string]*Variable {
+	return d.variables
 }

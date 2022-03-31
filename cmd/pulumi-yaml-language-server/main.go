@@ -4,10 +4,12 @@ import (
 	"io"
 	"os"
 
+	"github.com/pulumi/pulumi/sdk/v3/go/common/diag"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/diag/colors"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
+
 	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
 	"github.com/iwahbe/pulumi-lsp/sdk/yaml"
-	"github.com/pulumi/pulumi/sdk/v3/go/common/diag"
-	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
 )
 
 func main() {
@@ -28,7 +30,9 @@ func defaultPluginHost() (plugin.Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	sink := diag.DefaultSink(&stdio{false}, &stdio{false}, diag.FormatOptions{})
+	sink := diag.DefaultSink(&stdio{false}, &stdio{false}, diag.FormatOptions{
+		Color: colors.Never,
+	})
 	context, err := plugin.NewContext(sink, sink, nil, cfg, pwd, nil, false, nil)
 	if err != nil {
 		return nil, err

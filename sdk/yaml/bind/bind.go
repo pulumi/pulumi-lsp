@@ -33,10 +33,16 @@ type Decl struct {
 	lock *sync.RWMutex
 }
 
+// A value that a reference can bind to. This includes the variables, config and
+// resources section of the yaml template.
 type Variable struct {
 	// definition is either a Resource, *ast.ConfigParamDecl
 	definition Definition
 	uses       []Reference
+}
+
+func (v *Variable) Source() Definition {
+	return v.definition
 }
 
 type Definition interface {
@@ -48,6 +54,21 @@ type Definition interface {
 type Reference struct {
 	location *hcl.Range
 	access   PropertyAccessorList
+
+	variable *Variable
+	s        string
+}
+
+func (r *Reference) Var() *Variable {
+	return r.variable
+}
+
+func (r *Reference) Range() *hcl.Range {
+	return r.location
+}
+
+func (r *Reference) String() string {
+	return r.s
 }
 
 type PropertyAccessorList []PropertyAccessor
@@ -151,7 +172,7 @@ type PropertyAccessor struct {
 	rnge *hcl.Range
 }
 
-func (b *Decl) newRefernce(variable string, loc *hcl.Range, accessor []ast.PropertyAccessor) {
+func (b *Decl) newRefernce(variable string, loc *hcl.Range, accessor []ast.PropertyAccessor, repr string) {
 	v, ok := b.variables[variable]
 	// Name is used for the initial offset
 	var l []PropertyAccessor
@@ -196,11 +217,14 @@ func (b *Decl) newRefernce(variable string, loc *hcl.Range, accessor []ast.Prope
 		})
 	}
 	ref := Reference{location: loc, access: l}
-	if ok {
-		v.uses = append(v.uses, ref)
-	} else {
-		b.variables[variable] = &Variable{uses: []Reference{ref}}
+	if !ok {
+		v = &Variable{uses: []Reference{}}
+		b.variables[variable] = v
 	}
+	ref.variable = v
+	ref.s = repr
+	v.uses = append(v.uses, ref)
+
 }
 
 type Resource struct {
@@ -461,11 +485,12 @@ func (b *Decl) bind(e ast.Expr) error {
 	return nil
 }
 
-func (b *Decl) bindInvoke(invoke *ast.InvokeExpr) error {
-	b.invokes[&Invoke{
+func (d *Decl) bindInvoke(invoke *ast.InvokeExpr) error {
+	d.invokes[&Invoke{
 		token:   invoke.Token.Value,
 		defined: invoke,
 	}] = struct{}{}
+	d.bind(invoke.Args())
 	return nil
 }
 
@@ -515,8 +540,12 @@ func (b *Decl) bindResourceOptions(opts ast.ResourceOptionsDecl) error {
 
 func (b *Decl) bindPropertyAccess(p *ast.PropertyAccess, loc *hcl.Range) error {
 	l := p.Accessors
+	if len(l) == 0 {
+		b.diags = append(b.diags, emptyPropertyAccessDiag(loc))
+		return nil
+	}
 	if v, ok := p.Accessors[0].(*ast.PropertyName); ok {
-		b.newRefernce(v.Name, loc, l[1:])
+		b.newRefernce(v.Name, loc, l[1:], p.String())
 	} else {
 		b.diags = append(b.diags, propertyStartsWithIndexDiag(p, loc))
 	}

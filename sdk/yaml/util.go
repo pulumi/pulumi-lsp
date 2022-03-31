@@ -25,7 +25,7 @@ func convertPosition(p hcl.Pos) protocol.Position {
 	contract.Assertf(p.Line != 0, "hcl.Pos line starts at 1")
 	return protocol.Position{
 		Line:      uint32(p.Line - 1),
-		Character: uint32(p.Column),
+		Character: uint32(p.Column - 1),
 	}
 }
 

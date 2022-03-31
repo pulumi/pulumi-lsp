@@ -247,9 +247,8 @@ func (d *Decl) loadPackage(tk string, loader schema.Loader, errRange *hcl.Range)
 	if !ok {
 		p, err := loader.LoadPackage(pkgName, nil)
 		if err != nil {
-			var d diagsFromLocation
 			pkg = pkgCache{
-				diag: d.wrap(func(r *hcl.Range) *hcl.Diagnostic {
+				diag: NewDiagsFromLocation(func(r *hcl.Range) *hcl.Diagnostic {
 					return failedToLoadPackageDiag(pkgName, r, err)
 				}),
 			}
@@ -279,6 +278,12 @@ func pkgNameFromToken(tk string) (string, error) {
 }
 
 type diagsFromLocation func(*hcl.Range) hcl.Diagnostics
+
+func NewDiagsFromLocation(f func(*hcl.Range) *hcl.Diagnostic) diagsFromLocation {
+	return func(r *hcl.Range) hcl.Diagnostics {
+		return hcl.Diagnostics{f(r)}
+	}
+}
 
 // Wraps a possibly nil diagsFromLocation in another diagnostic.
 func (d *diagsFromLocation) wrap(f func(*hcl.Range) *hcl.Diagnostic) diagsFromLocation {
@@ -343,33 +348,33 @@ type FunctionSpec struct {
 func newPkgCache(p *schema.Package) pkgCache {
 	resources := map[string]ResourceSpec{}
 	invokes := map[string]FunctionSpec{}
-	var d diagsFromLocation
 	insertResource := func(k string, v *schema.Resource) {
 		f, alreadyUsed := resources[v.Token]
 		if alreadyUsed {
-			f.diag = d.wrap(func(r *hcl.Range) *hcl.Diagnostic {
+			f.diag = NewDiagsFromLocation(func(r *hcl.Range) *hcl.Diagnostic {
 				return multipleResourcesDiag(v.Token, r)
 			})
 		} else {
+			r := ResourceSpec{v, nil}
 			if v.DeprecationMessage != "" {
-				d = d.wrap(func(r *hcl.Range) *hcl.Diagnostic {
+				r.diag = NewDiagsFromLocation(func(r *hcl.Range) *hcl.Diagnostic {
 					return depreciatedDiag(v.Token, v.DeprecationMessage, r)
 				})
 			}
-			resources[v.Token] = ResourceSpec{v, d}
+			resources[v.Token] = r
 		}
 
 	}
 	for _, invoke := range p.Functions {
 		_, ok := invokes[invoke.Token]
 		contract.Assertf(!ok, "Duplicate invokes found for token %s", invoke.Token)
-		var dep diagsFromLocation
+		spec := FunctionSpec{invoke, nil}
 		if invoke.DeprecationMessage != "" {
-			dep = dep.wrap(func(r *hcl.Range) *hcl.Diagnostic {
+			spec.diag = NewDiagsFromLocation(func(r *hcl.Range) *hcl.Diagnostic {
 				return depreciatedDiag(invoke.Token, invoke.DeprecationMessage, r)
 			})
 		}
-		invokes[invoke.Token] = FunctionSpec{invoke, dep}
+		invokes[invoke.Token] = spec
 	}
 	for _, r := range p.Resources {
 		insertResource(r.Token, r)

@@ -7,6 +7,7 @@ import (
 
 	"go.lsp.dev/protocol"
 
+	"github.com/iwahbe/pulumi-lsp/sdk/yaml/bind"
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 )
@@ -65,6 +66,15 @@ func (doc *document) objectAtPoint(pos protocol.Position) (Object, error) {
 			}, nil
 		}
 	}
+
+	for _, r := range bound.A.References() {
+		if posInRange(r.Range(), pos) {
+			return &Reference{
+				object: object{convertRange(r.Range())},
+				ref:    &r,
+			}, nil
+		}
+	}
 	return nil, nil
 }
 
@@ -79,9 +89,18 @@ func (o object) Range() *protocol.Range {
 
 // An object in the schema that can be acted upon.
 type Object interface {
-	Describe() protocol.MarkupContent
+	Describe() (protocol.MarkupContent, bool)
 	Range() *protocol.Range
 	isObject()
+}
+
+type Reference struct {
+	object
+	ref *bind.Reference
+}
+
+func (r *Reference) Describe() (protocol.MarkupContent, bool) {
+	return protocol.MarkupContent{}, false
 }
 
 type Resource struct {
@@ -89,13 +108,13 @@ type Resource struct {
 	schema *schema.Resource
 }
 
-func (r Resource) Describe() protocol.MarkupContent {
+func (r Resource) Describe() (protocol.MarkupContent, bool) {
 	b := &bytes.Buffer{}
 	writeResource(b, r.schema)
 	return protocol.MarkupContent{
 		Kind:  protocol.Markdown,
 		Value: b.String(),
-	}
+	}, true
 }
 
 type Invoke struct {
@@ -103,13 +122,13 @@ type Invoke struct {
 	schema *schema.Function
 }
 
-func (f Invoke) Describe() protocol.MarkupContent {
+func (f Invoke) Describe() (protocol.MarkupContent, bool) {
 	b := &bytes.Buffer{}
 	writeFunction(b, f.schema)
 	return protocol.MarkupContent{
 		Kind:  protocol.Markdown,
 		Value: b.String(),
-	}
+	}, true
 }
 
 func describeType(t schema.Type) protocol.MarkupContent {
