@@ -15,6 +15,7 @@ import (
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 
 	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
+	"github.com/iwahbe/pulumi-lsp/sdk/step"
 )
 
 type documentAnalysisPipeline struct {
@@ -22,71 +23,10 @@ type documentAnalysisPipeline struct {
 	cancel context.CancelFunc
 
 	// First stage, program is parsed
-	parsed *step[Tuple[*ast.TemplateDecl, syntax.Diagnostics]]
+	parsed *step.Step[Tuple[*ast.TemplateDecl, syntax.Diagnostics]]
 
 	// Then the program is analyzed
-	bound *step[Tuple[*bind.Decl, *syntax.Diagnostic]]
-}
-
-type step[T any] struct {
-	// The returned data, once it is returned.
-	data T
-	// When this channel is closed, the computation has finished, we we can
-	// return the data.
-	done chan struct{}
-	// If this context is canceled, we return.
-	ctx context.Context
-}
-
-func (s *step[T]) TryGetResult() (T, bool) {
-	var t T
-	select {
-	case _, _ = <-s.done:
-		return s.data, true
-	case _, _ = <-s.ctx.Done():
-		return t, false
-	default:
-		return t, false
-	}
-}
-
-func (s *step[T]) GetResult() (T, bool) {
-	var t T
-	select {
-	case <-s.done:
-		return s.data, true
-	case <-s.ctx.Done():
-		return t, false
-	}
-}
-
-func NewStep[T any](ctx context.Context, f func() (T, bool)) *step[T] {
-	ctx, cancel := context.WithCancel(ctx)
-	s := &step[T]{
-		ctx:  ctx,
-		done: make(chan struct{}),
-	}
-	go func() {
-		var ok bool
-		s.data, ok = f()
-		if !ok {
-			cancel()
-		} else {
-			close(s.done)
-		}
-	}()
-	return s
-}
-
-func StepThen[T any, U any](s *step[T], f func(T) (U, bool)) *step[U] {
-	return NewStep(s.ctx, func() (U, bool) {
-		var u U
-		t, ok := s.GetResult()
-		if !ok {
-			return u, false
-		}
-		return f(t)
-	})
+	bound *step.Step[Tuple[*bind.Decl, *syntax.Diagnostic]]
 }
 
 func (d *documentAnalysisPipeline) isDone() bool {
@@ -101,7 +41,7 @@ func (d *documentAnalysisPipeline) isDone() bool {
 // Parse the document
 func (d *documentAnalysisPipeline) parse(text lsp.Document) {
 	// This is the first step of analysis, so we don't check for previous errors
-	d.parsed = NewStep(d.ctx, func() (Tuple[*ast.TemplateDecl, syntax.Diagnostics], bool) {
+	d.parsed = step.New(d.ctx, func() (Tuple[*ast.TemplateDecl, syntax.Diagnostics], bool) {
 		parsed, parseDiags, err := yaml.LoadYAML(text.URI().Filename(), strings.NewReader(text.String()))
 		if err != nil {
 			parseDiags = append(parseDiags, d.promoteError("Parse error", err))
@@ -124,7 +64,8 @@ func (d *documentAnalysisPipeline) bind(t Tuple[*ast.TemplateDecl, syntax.Diagno
 	return Tuple[*bind.Decl, *syntax.Diagnostic]{bound, hclErr}, true
 }
 
-// Creates a new asynchronous analysis pipeline, returning a handle to the process.
+// Creates a new asynchronous analysis pipeline, returning a handle to the
+// process. To avoid a memory leak, ${RESULT}.cancel must be called.
 func NewDocumentAnalysisPipeline(c lsp.Client, text lsp.Document, loader schema.Loader) *documentAnalysisPipeline {
 	ctx, cancel := context.WithCancel(c.Context())
 	d := &documentAnalysisPipeline{
@@ -135,36 +76,31 @@ func NewDocumentAnalysisPipeline(c lsp.Client, text lsp.Document, loader schema.
 	}
 	go func(c lsp.Client, text lsp.Document, loader schema.Loader) {
 		// We need to ensure everything finished when we exit
-		defer cancel()
 		c.LogInfof("Kicking off analysis for %s", text.URI().Filename())
 
 		d.parse(text)
-		StepThen(d.parsed, func(Tuple[*ast.TemplateDecl, syntax.Diagnostics]) (struct{}, bool) {
+		step.Then(d.parsed, func(Tuple[*ast.TemplateDecl, syntax.Diagnostics]) (struct{}, bool) {
 			d.sendDiags(c, text.URI())
 			return struct{}{}, true
 		})
 
-		d.bound = StepThen(d.parsed, d.bind)
-		StepThen(d.bound, func(Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
+		d.bound = step.Then(d.parsed, d.bind)
+		step.Then(d.bound, func(Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
 			d.sendDiags(c, text.URI())
 			return struct{}{}, true
 		})
 
-		schematize := StepThen(d.bound, func(t Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
+		schematize := step.Then(d.bound, func(t Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
 			if t.A != nil {
 				t.A.LoadSchema(loader)
 				return struct{}{}, true
 			}
 			return struct{}{}, false
 		})
-		lastDiag := StepThen(schematize, func(struct{}) (struct{}, bool) {
+		step.Then(schematize, func(struct{}) (struct{}, bool) {
 			d.sendDiags(c, text.URI())
 			return struct{}{}, true
 		})
-		// This will block on `lastDiag`, which will finish only when the entire
-		// chain is finished. Blocking prevents the `cancel` from being called
-		// prematurely.
-		lastDiag.GetResult()
 	}(c, text, loader)
 	return d
 }
