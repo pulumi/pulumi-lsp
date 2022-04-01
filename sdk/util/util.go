@@ -1,3 +1,5 @@
+// Copyright 2022, Pulumi Corporation.  All rights reserved.
+
 package util
 
 func MapOver[T any, U any](in []T, f func(T) U) []U {

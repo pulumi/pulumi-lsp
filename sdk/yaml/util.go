@@ -1,3 +1,5 @@
+// Copyright 2022, Pulumi Corporation.  All rights reserved.
+
 package yaml
 
 import (
@@ -10,8 +12,8 @@ import (
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 
-	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
-	"github.com/iwahbe/pulumi-lsp/sdk/util"
+	"github.com/pulumi/pulumi-lsp/sdk/lsp"
+	"github.com/pulumi/pulumi-lsp/sdk/util"
 )
 
 func convertRange(r *hcl.Range) protocol.Range {

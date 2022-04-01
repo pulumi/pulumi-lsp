@@ -1,3 +1,5 @@
+// Copyright 2022, Pulumi Corporation.  All rights reserved.
+
 package bind
 
 import (
@@ -5,7 +7,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 
-	"github.com/iwahbe/pulumi-lsp/sdk/util"
+	"github.com/pulumi/pulumi-lsp/sdk/util"
 )
 
 // Return a list of all resources whose token matches `tk`.

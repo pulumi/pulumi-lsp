@@ -1,4 +1,4 @@
-module github.com/iwahbe/pulumi-lsp
+module github.com/pulumi/pulumi-lsp
 
 go 1.18
 

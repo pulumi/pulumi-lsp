@@ -1,3 +1,5 @@
+// Copyright 2022, Pulumi Corporation.  All rights reserved.
+
 package lsp
 
 import (
@@ -47,10 +49,19 @@ func (c *Client) WorkspaceFolders() ([]protocol.WorkspaceFolder, error) {
 }
 
 func (c *Client) logMessage(level protocol.MessageType, txt string) error {
-	return c.inner.LogMessage(c.ctx, &protocol.LogMessageParams{
+	err := c.inner.LogMessage(c.ctx, &protocol.LogMessageParams{
 		Message: txt,
 		Type:    level,
 	})
+
+	if err != nil {
+		err = c.inner.LogMessage(c.ctx, &protocol.LogMessageParams{
+			Message: fmt.Sprintf(`Failed to send message "%s" at level %s: %s`,
+				txt, level.String(), err.Error()),
+			Type: protocol.MessageTypeError,
+		})
+	}
+	return err
 }
 
 func (c *Client) LogErrorf(msg string, args ...interface{}) error {

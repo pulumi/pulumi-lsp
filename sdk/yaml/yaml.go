@@ -1,3 +1,5 @@
+// Copyright 2022, Pulumi Corporation.  All rights reserved.
+
 package yaml
 
 import (
@@ -7,14 +9,14 @@ import (
 
 	"go.lsp.dev/protocol"
 
-	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
-	"github.com/iwahbe/pulumi-lsp/sdk/yaml/bind"
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 
-	"github.com/iwahbe/pulumi-lsp/sdk/util"
+	"github.com/pulumi/pulumi-lsp/sdk/lsp"
+	"github.com/pulumi/pulumi-lsp/sdk/util"
+	"github.com/pulumi/pulumi-lsp/sdk/yaml/bind"
 )
 
 type server struct {
@@ -100,7 +102,11 @@ func (s *server) didChange(client lsp.Client, params *protocol.DidChangeTextDocu
 	if !ok {
 		return fmt.Errorf("could not find document %s(%s)", uri.Filename(), uri)
 	}
-	doc.text.AcceptChanges(params.ContentChanges)
+	if err := doc.text.AcceptChanges(params.ContentChanges); err != nil {
+		// Something has gone deeply wrong. We rely on having a reliable copy of
+		// the document.
+		return fmt.Errorf("Document might be unknown: %w", err)
+	}
 	var defRange protocol.Range
 	err := client.LogInfof("%s changed(wholeChange=%t)", fileName, params.ContentChanges[0].Range == defRange)
 	doc.process(client)
@@ -122,6 +128,7 @@ func (s *server) hover(client lsp.Client, params *protocol.HoverParams) (*protoc
 		client.LogErrorf(err.Error())
 		return nil, nil
 	}
+	client.LogInfof("Object found for hover: %v", typ)
 	if typ != nil {
 		if description, ok := typ.Describe(); ok {
 			return &protocol.Hover{
@@ -224,7 +231,7 @@ func (s *server) typePropertyCompletion(t schema.Type, filterPrefix string) (*pr
 		if r.InputProperties != nil {
 			l = append(l, r.InputProperties...)
 		}
-		return s.typePropertyFromPropertyList(append(r.Properties, r.InputProperties...), filterPrefix)
+		return s.typePropertyFromPropertyList(l, filterPrefix)
 	case *schema.ObjectType:
 		return s.typePropertyFromPropertyList(t.Properties, filterPrefix)
 	default:

@@ -1,3 +1,5 @@
+// Copyright 2022, Pulumi Corporation.  All rights reserved.
+
 package bind
 
 import (
@@ -10,7 +12,7 @@ import (
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 
-	"github.com/iwahbe/pulumi-lsp/sdk/util"
+	"github.com/pulumi/pulumi-lsp/sdk/util"
 )
 
 // Loads schemas as necessary from the loader to attach to resources and invokes.
@@ -72,7 +74,6 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 
 	for _, v := range d.variables {
 		if v, ok := v.definition.(*Resource); ok {
-			v := *v
 			if v.defined.Value == nil || v.defined.Value.Type == nil {
 				// Type is not defined, so exit early
 				continue
@@ -295,9 +296,10 @@ func (d *Decl) loadPackage(tk string, loader schema.Loader, errRange *hcl.Range)
 		return ""
 	}
 
-	pkg, ok := d.loadedPackages[pkgName]
+	_, ok := d.loadedPackages[pkgName]
 	if !ok {
 		p, err := loader.LoadPackage(pkgName, nil)
+		var pkg pkgCache
 		if err != nil {
 			pkg = pkgCache{
 				diag: NewDiagsFromLocation(func(r *hcl.Range) *hcl.Diagnostic {

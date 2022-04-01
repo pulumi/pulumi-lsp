@@ -1,3 +1,5 @@
+// Copyright 2022, Pulumi Corporation.  All rights reserved.
+
 // Bind performs static analysis on a YAML document. The entry point for the package is `NewDecl`.
 //
 // bind.go contains logic for the initial non-schema binding of an `ast.TemplateDecl` into a `Decl`.
@@ -16,7 +18,7 @@ import (
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 
-	"github.com/iwahbe/pulumi-lsp/sdk/util"
+	"github.com/pulumi/pulumi-lsp/sdk/util"
 )
 
 type Decl struct {
@@ -382,8 +384,8 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 		}
 	}
 
-	bound.analyzeBindings()
-	return bound, nil
+	err := bound.analyzeBindings()
+	return bound, err
 }
 
 // Performs analysis on bindings without a schema. This results in missing
@@ -503,8 +505,7 @@ func (d *Decl) bindInvoke(invoke *ast.InvokeExpr) error {
 		token:   invoke.Token.Value,
 		defined: invoke,
 	}] = struct{}{}
-	d.bind(invoke.Args())
-	return nil
+	return d.bind(invoke.Args())
 }
 
 func (d *Decl) bindResource(r ast.ResourcesMapEntry) error {

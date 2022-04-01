@@ -1,3 +1,5 @@
+// Copyright 2022, Pulumi Corporation.  All rights reserved.
+
 package yaml
 
 import (
@@ -10,7 +12,7 @@ import (
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 
-	"github.com/iwahbe/pulumi-lsp/sdk/yaml/bind"
+	"github.com/pulumi/pulumi-lsp/sdk/yaml/bind"
 )
 
 // Find the object at point, as well as it's location. An error indicates that
@@ -109,10 +111,11 @@ type Resource struct {
 }
 
 func (r Resource) Describe() (protocol.MarkupContent, bool) {
-	b := &bytes.Buffer{}
 	if r.schema == nil {
 		return protocol.MarkupContent{}, false
 	}
+
+	b := &bytes.Buffer{}
 	writeResource(b, r.schema)
 	return protocol.MarkupContent{
 		Kind:  protocol.Markdown,
@@ -191,8 +194,4 @@ func writePropertyDescription(w Writer, prop *schema.Property) {
 	w("### %s\n", prop.Name)
 	w("**Type:** `%s`\n\n", codegen.UnwrapType(prop.Type))
 	w("%s\n", prop.Comment)
-}
-
-func writeObjectDescription(w Writer, obj *schema.ObjectType) {
-
 }

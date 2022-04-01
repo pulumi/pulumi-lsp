@@ -1,3 +1,5 @@
+// Copyright 2022, Pulumi Corporation.  All rights reserved.
+
 package yaml
 
 import (
@@ -8,15 +10,15 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"go.lsp.dev/protocol"
 
-	"github.com/iwahbe/pulumi-lsp/sdk/yaml/bind"
 	yaml "github.com/pulumi/pulumi-yaml/pkg/pulumiyaml"
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/syntax"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 
-	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
-	"github.com/iwahbe/pulumi-lsp/sdk/step"
-	"github.com/iwahbe/pulumi-lsp/sdk/util"
+	"github.com/pulumi/pulumi-lsp/sdk/lsp"
+	"github.com/pulumi/pulumi-lsp/sdk/step"
+	"github.com/pulumi/pulumi-lsp/sdk/util"
+	"github.com/pulumi/pulumi-lsp/sdk/yaml/bind"
 )
 
 type documentAnalysisPipeline struct {
@@ -49,7 +51,7 @@ func (d *documentAnalysisPipeline) parse(text lsp.Document) {
 		} else if d.parsed == nil {
 			parseDiags = append(parseDiags, d.promoteError("Parse error", fmt.Errorf("No template returned")))
 		}
-		return util.Tuple[*ast.TemplateDecl, syntax.Diagnostics]{parsed, parseDiags}, true
+		return util.Tuple[*ast.TemplateDecl, syntax.Diagnostics]{A: parsed, B: parseDiags}, true
 	})
 }
 
@@ -62,7 +64,7 @@ func (d *documentAnalysisPipeline) bind(t util.Tuple[*ast.TemplateDecl, syntax.D
 	if err != nil {
 		hclErr = d.promoteError("Binding error", err)
 	}
-	return util.Tuple[*bind.Decl, *syntax.Diagnostic]{bound, hclErr}, true
+	return util.Tuple[*bind.Decl, *syntax.Diagnostic]{A: bound, B: hclErr}, true
 }
 
 // Creates a new asynchronous analysis pipeline, returning a handle to the
@@ -81,14 +83,12 @@ func NewDocumentAnalysisPipeline(c lsp.Client, text lsp.Document, loader schema.
 
 		d.parse(text)
 		step.Then(d.parsed, func(util.Tuple[*ast.TemplateDecl, syntax.Diagnostics]) (struct{}, bool) {
-			d.sendDiags(c, text.URI())
-			return struct{}{}, true
+			return struct{}{}, d.sendDiags(c, text.URI()) == nil
 		})
 
 		d.bound = step.Then(d.parsed, d.bind)
 		step.Then(d.bound, func(util.Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
-			d.sendDiags(c, text.URI())
-			return struct{}{}, true
+			return struct{}{}, d.sendDiags(c, text.URI()) == nil
 		})
 
 		schematize := step.Then(d.bound, func(t util.Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
@@ -99,8 +99,7 @@ func NewDocumentAnalysisPipeline(c lsp.Client, text lsp.Document, loader schema.
 			return struct{}{}, false
 		})
 		step.Then(schematize, func(struct{}) (struct{}, bool) {
-			d.sendDiags(c, text.URI())
-			return struct{}{}, true
+			return struct{}{}, d.sendDiags(c, text.URI()) == nil
 		})
 	}(c, text, loader)
 	return d
@@ -125,7 +124,7 @@ func (d *documentAnalysisPipeline) diags() syntax.Diagnostics {
 }
 
 // Actually send the report request to the lsp server
-func (d *documentAnalysisPipeline) sendDiags(c lsp.Client, uri protocol.DocumentURI) {
+func (d *documentAnalysisPipeline) sendDiags(c lsp.Client, uri protocol.DocumentURI) error {
 	lspDiags := []protocol.Diagnostic{}
 	for _, diag := range d.diags() {
 		if diag == nil {
@@ -146,7 +145,7 @@ func (d *documentAnalysisPipeline) sendDiags(c lsp.Client, uri protocol.Document
 
 	// Diagnostics last until the next publish, so we need to publish even if we
 	// have not found any diags. This will clear the diags for the user.
-	c.PublishDiagnostics(&protocol.PublishDiagnosticsParams{
+	return c.PublishDiagnostics(&protocol.PublishDiagnosticsParams{
 		URI:         uri,
 		Version:     0,
 		Diagnostics: lspDiags,

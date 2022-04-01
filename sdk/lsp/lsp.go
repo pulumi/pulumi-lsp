@@ -1,3 +1,5 @@
+// Copyright 2022, Pulumi Corporation.  All rights reserved.
+
 // Implements the LSP server itself, providing the jsonrpc2 to lsp protocol.
 // This module does not handle business logic for the actual language.
 

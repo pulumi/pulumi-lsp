@@ -1,7 +1,7 @@
 {
   "name": "pulumi-lsp-client",
   "description": "VSCode part of a language server",
-  "publisher": "iwahbe",
+  "publisher": "pulumi",
   "author": "iwahbe",
   "license": "MIT",
   "version": "0.0.1",

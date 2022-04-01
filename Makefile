@@ -21,3 +21,10 @@ clean:
 
 test:
 	go test ./...
+
+.phony: lint
+lint:: lint-copyright lint-golang
+lint-golang:
+	golangci-lint -c .golangci.yml run
+lint-copyright:
+	pulumictl copyright

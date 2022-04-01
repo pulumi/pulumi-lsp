@@ -1,3 +1,5 @@
+// Copyright 2022, Pulumi Corporation.  All rights reserved.
+
 package main
 
 import (
@@ -8,8 +10,8 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/common/diag/colors"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
 
-	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
-	"github.com/iwahbe/pulumi-lsp/sdk/yaml"
+	"github.com/pulumi/pulumi-lsp/sdk/lsp"
+	"github.com/pulumi/pulumi-lsp/sdk/yaml"
 )
 
 func main() {
