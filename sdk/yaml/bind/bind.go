@@ -15,6 +15,8 @@ import (
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
+
+	"github.com/iwahbe/pulumi-lsp/sdk/util"
 )
 
 type Decl struct {
@@ -73,12 +75,6 @@ func (r *Reference) String() string {
 
 type PropertyAccessorList []PropertyAccessor
 
-// TODO: Unify Tuple into a global util package
-type Tuple[A any, B any] struct {
-	A A
-	B B
-}
-
 // Compute out the type chain as long as possible.
 func (l PropertyAccessorList) Typed(root schema.Type) ([]schema.Type, *hcl.Diagnostic) {
 	types := make([]schema.Type, len(l))
@@ -90,7 +86,7 @@ func (l PropertyAccessorList) Typed(root schema.Type) ([]schema.Type, *hcl.Diagn
 			}
 			existing[p.Name] = struct{}{}
 		}
-		return nil, propertyDoesNotExistDiag(tag, parent.String(), mapKeys(existing), rnge)
+		return nil, propertyDoesNotExistDiag(tag, parent.String(), util.MapKeys(existing), rnge)
 	}
 
 	getStringTag := func(p ast.PropertyAccessor) string {
@@ -383,7 +379,8 @@ func (b *Decl) analyzeBindings() error {
 				b.diags = append(b.diags, variableDoesNotExistDiag(name, use))
 			}
 		}
-		if len(v.uses) == 0 {
+		_, isResource := v.definition.(*Resource)
+		if len(v.uses) == 0 && !isResource {
 			b.diags = append(b.diags, unusedVariableDiag(name, v.definition.DefinitionRange()))
 		}
 	}
@@ -495,6 +492,19 @@ func (d *Decl) bindInvoke(invoke *ast.InvokeExpr) error {
 }
 
 func (b *Decl) bindResource(r *ast.ResourcesMapEntry) error {
+	if r == nil {
+		return nil
+	}
+	if r.Value == nil {
+		b.variables[r.Key.Value] = &Variable{definition: &Resource{defined: r}}
+		b.diags = append(b.diags, missingResourceBodyDiag(r.Key.Value, r.Key.Syntax().Syntax().Range()))
+		return nil
+	}
+	if r.Value.Type == nil {
+		b.variables[r.Key.Value] = &Variable{definition: &Resource{defined: r}}
+		b.diags = append(b.diags, missingResourceTypeDiag(r.Key.Value, r.Key.Syntax().Syntax().Range()))
+		return nil
+	}
 	res := Resource{
 		token:   r.Value.Type.Value,
 		defined: r,

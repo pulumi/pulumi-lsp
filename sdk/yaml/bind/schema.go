@@ -9,6 +9,8 @@ import (
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
+
+	"github.com/iwahbe/pulumi-lsp/sdk/util"
 )
 
 // Loads schemas as necessary from the loader to attach to resources and invokes.
@@ -37,7 +39,7 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 					d.diags = d.diags.Extend(f.diag(typeLoc))
 				}
 				invoke.definition = f.Function
-				d.validateProperties(mapSlice(invoke.defined.CallArgs.Entries, func(o ast.ObjectProperty) MapKey {
+				d.validateProperties(util.MapOver(invoke.defined.CallArgs.Entries, func(o ast.ObjectProperty) MapKey {
 					return MapKey{o.Key.(*ast.StringExpr).Value, o.Key.Syntax().Syntax().Range()}
 				}), f.Function.Inputs.Properties, f.Token,
 					invoke.defined.CallArgs.Syntax().Syntax().Range())
@@ -57,7 +59,7 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 								propertyDoesNotExistDiag(
 									ret.Value,
 									out.String(),
-									mapKeys(existing),
+									util.MapKeys(existing),
 									ret.Syntax().Syntax().Range()))
 						}
 					}
@@ -69,9 +71,13 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 	}
 
 	for _, v := range d.variables {
-		if resource, ok := v.definition.(*Resource); ok {
-			typeLoc := resource.defined.Value.Type.Syntax().Syntax().Range()
-			pkgName := d.loadPackage(resource.token, loader, typeLoc)
+		if v, ok := v.definition.(*Resource); ok {
+			if v.defined.Value == nil || v.defined.Value.Type == nil {
+				// Type is not defined, so exit early
+				continue
+			}
+			typeLoc := v.defined.Value.Type.Syntax().Syntax().Range()
+			pkgName := d.loadPackage(v.token, loader, typeLoc)
 			if pkgName != "" {
 				pkg := d.loadedPackages[pkgName]
 				if pkg.diag != nil {
@@ -82,21 +88,21 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 				if !pkg.isValid() {
 					continue
 				}
-				if f, ok := pkg.ResolveResource(resource.token); ok {
+				if f, ok := pkg.ResolveResource(v.token); ok {
 					// There is something wrong with this definition
 					if f.diag != nil {
 						d.diags = d.diags.Extend(f.diag(typeLoc))
 					}
-					resource.definition = f.Resource
-					d.validateProperties(mapSlice(resource.defined.Value.Properties.Entries, func(m ast.PropertyMapEntry) MapKey {
+					v.definition = f.Resource
+					d.validateProperties(util.MapOver(v.defined.Value.Properties.Entries, func(m ast.PropertyMapEntry) MapKey {
 						return MapKey{m.Key.Value, m.Key.Syntax().Syntax().Range()}
 					}),
 						f.Resource.InputProperties, (&schema.ResourceType{
 							Token:    f.Resource.Token,
 							Resource: f.Resource,
-						}).String(), typeLoc)
+						}).String(), v.defined.Key.Syntax().Syntax().Range())
 				} else {
-					d.diags = append(d.diags, missingTokenDiag(pkgName, resource.token, typeLoc))
+					d.diags = append(d.diags, missingTokenDiag(pkgName, v.token, typeLoc))
 				}
 			}
 		}
@@ -108,14 +114,6 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 type MapKey struct {
 	tag  string
 	rnge *hcl.Range
-}
-
-func mapSlice[T any, U any](in []T, f func(T) U) []U {
-	l := make([]U, len(in))
-	for i, t := range in {
-		l[i] = f(t)
-	}
-	return l
 }
 
 // Applied appropriate diagnostics to a property map given a backing schema.
@@ -138,7 +136,7 @@ func (d *Decl) validateProperties(existing []MapKey, typed []*schema.Property, p
 	for _, prop := range existing {
 		if !resourceProps[prop.tag] {
 			d.diags = append(d.diags, propertyDoesNotExistDiag(prop.tag,
-				parent, mapKeys(resourceProps), prop.rnge))
+				parent, util.MapKeys(resourceProps), prop.rnge))
 		}
 	}
 }

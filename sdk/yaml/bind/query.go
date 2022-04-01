@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/hcl/v2"
+
+	"github.com/iwahbe/pulumi-lsp/sdk/util"
 )
 
 // Return a list of all resources whose token matches `tk`.
@@ -20,7 +22,7 @@ func (d *Decl) GetResources(tk string) ([]Resource, error) {
 	if !ok {
 		return nil, fmt.Errorf(
 			"Package '%s' is not loaded for query '%s', loaded packages are %s",
-			pkgName, tk, mapKeys(d.loadedPackages))
+			pkgName, tk, util.MapKeys(d.loadedPackages))
 	}
 	if pkg.p == nil {
 		return nil, fmt.Errorf("Failed to load pkg '%s'", pkgName)
@@ -34,7 +36,7 @@ func (d *Decl) GetResources(tk string) ([]Resource, error) {
 	}
 	var rs []Resource
 	for _, v := range d.variables {
-		if r, ok := v.definition.(*Resource); ok && sliceContains(names, r.token) {
+		if r, ok := v.definition.(*Resource); ok && util.SliceContains(names, r.token) {
 			rs = append(rs, *r)
 		}
 	}
@@ -43,7 +45,7 @@ func (d *Decl) GetResources(tk string) ([]Resource, error) {
 
 // Get all invokes used in the program.
 func (d *Decl) Invokes() []Invoke {
-	return derefList(mapKeys(d.invokes))
+	return util.DerefList(util.MapKeys(d.invokes))
 }
 
 func (b *Decl) Diags() hcl.Diagnostics {
@@ -51,43 +53,6 @@ func (b *Decl) Diags() hcl.Diagnostics {
 		return nil
 	}
 	return b.diags
-}
-
-func sliceContains[T comparable](slice []T, el T) bool {
-	for _, t := range slice {
-		if t == el {
-			return true
-		}
-	}
-	return false
-}
-
-func mapKeys[K comparable, V any](m map[K]V) []K {
-	arr := make([]K, len(m))
-	i := 0
-	for k := range m {
-		arr[i] = k
-		i++
-	}
-	return arr
-}
-
-func mapValues[K comparable, V any](m map[K]V) []V {
-	arr := make([]V, len(m))
-	i := 0
-	for _, v := range m {
-		arr[i] = v
-		i++
-	}
-	return arr
-}
-
-func derefList[T any](l []*T) []T {
-	ls := make([]T, len(l))
-	for i := range l {
-		ls[i] = *l[i]
-	}
-	return ls
 }
 
 func (d *Decl) References() []Reference {

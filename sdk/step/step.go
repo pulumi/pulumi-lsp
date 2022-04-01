@@ -1,7 +1,11 @@
 // Generic Concurrency primitives
 package step
 
-import "context"
+import (
+	"context"
+
+	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
+)
 
 type Step[T any] struct {
 	// The returned data, once it is returned.
@@ -26,6 +30,7 @@ func (s *Step[T]) TryGetResult() (T, bool) {
 }
 
 func (s *Step[T]) GetResult() (T, bool) {
+	contract.Assertf(s != nil, "Cannot get the result of a nil Step")
 	var t T
 	select {
 	case <-s.done:

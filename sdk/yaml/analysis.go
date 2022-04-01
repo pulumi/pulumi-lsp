@@ -16,6 +16,7 @@ import (
 
 	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
 	"github.com/iwahbe/pulumi-lsp/sdk/step"
+	"github.com/iwahbe/pulumi-lsp/sdk/util"
 )
 
 type documentAnalysisPipeline struct {
@@ -23,10 +24,10 @@ type documentAnalysisPipeline struct {
 	cancel context.CancelFunc
 
 	// First stage, program is parsed
-	parsed *step.Step[Tuple[*ast.TemplateDecl, syntax.Diagnostics]]
+	parsed *step.Step[util.Tuple[*ast.TemplateDecl, syntax.Diagnostics]]
 
 	// Then the program is analyzed
-	bound *step.Step[Tuple[*bind.Decl, *syntax.Diagnostic]]
+	bound *step.Step[util.Tuple[*bind.Decl, *syntax.Diagnostic]]
 }
 
 func (d *documentAnalysisPipeline) isDone() bool {
@@ -41,27 +42,27 @@ func (d *documentAnalysisPipeline) isDone() bool {
 // Parse the document
 func (d *documentAnalysisPipeline) parse(text lsp.Document) {
 	// This is the first step of analysis, so we don't check for previous errors
-	d.parsed = step.New(d.ctx, func() (Tuple[*ast.TemplateDecl, syntax.Diagnostics], bool) {
+	d.parsed = step.New(d.ctx, func() (util.Tuple[*ast.TemplateDecl, syntax.Diagnostics], bool) {
 		parsed, parseDiags, err := yaml.LoadYAML(text.URI().Filename(), strings.NewReader(text.String()))
 		if err != nil {
 			parseDiags = append(parseDiags, d.promoteError("Parse error", err))
 		} else if d.parsed == nil {
 			parseDiags = append(parseDiags, d.promoteError("Parse error", fmt.Errorf("No template returned")))
 		}
-		return Tuple[*ast.TemplateDecl, syntax.Diagnostics]{parsed, parseDiags}, true
+		return util.Tuple[*ast.TemplateDecl, syntax.Diagnostics]{parsed, parseDiags}, true
 	})
 }
 
-func (d *documentAnalysisPipeline) bind(t Tuple[*ast.TemplateDecl, syntax.Diagnostics]) (Tuple[*bind.Decl, *syntax.Diagnostic], bool) {
+func (d *documentAnalysisPipeline) bind(t util.Tuple[*ast.TemplateDecl, syntax.Diagnostics]) (util.Tuple[*bind.Decl, *syntax.Diagnostic], bool) {
 	if t.A == nil {
-		return Tuple[*bind.Decl, *syntax.Diagnostic]{}, false
+		return util.Tuple[*bind.Decl, *syntax.Diagnostic]{}, false
 	}
 	bound, err := bind.NewDecl(t.A)
 	var hclErr *hcl.Diagnostic
 	if err != nil {
 		hclErr = d.promoteError("Binding error", err)
 	}
-	return Tuple[*bind.Decl, *syntax.Diagnostic]{bound, hclErr}, true
+	return util.Tuple[*bind.Decl, *syntax.Diagnostic]{bound, hclErr}, true
 }
 
 // Creates a new asynchronous analysis pipeline, returning a handle to the
@@ -79,18 +80,18 @@ func NewDocumentAnalysisPipeline(c lsp.Client, text lsp.Document, loader schema.
 		c.LogInfof("Kicking off analysis for %s", text.URI().Filename())
 
 		d.parse(text)
-		step.Then(d.parsed, func(Tuple[*ast.TemplateDecl, syntax.Diagnostics]) (struct{}, bool) {
+		step.Then(d.parsed, func(util.Tuple[*ast.TemplateDecl, syntax.Diagnostics]) (struct{}, bool) {
 			d.sendDiags(c, text.URI())
 			return struct{}{}, true
 		})
 
 		d.bound = step.Then(d.parsed, d.bind)
-		step.Then(d.bound, func(Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
+		step.Then(d.bound, func(util.Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
 			d.sendDiags(c, text.URI())
 			return struct{}{}, true
 		})
 
-		schematize := step.Then(d.bound, func(t Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
+		schematize := step.Then(d.bound, func(t util.Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
 			if t.A != nil {
 				t.A.LoadSchema(loader)
 				return struct{}{}, true
@@ -127,6 +128,9 @@ func (d *documentAnalysisPipeline) diags() syntax.Diagnostics {
 func (d *documentAnalysisPipeline) sendDiags(c lsp.Client, uri protocol.DocumentURI) {
 	lspDiags := []protocol.Diagnostic{}
 	for _, diag := range d.diags() {
+		if diag == nil {
+			continue
+		}
 		diagnostic := protocol.Diagnostic{
 			Severity: convertSeverity(diag.Severity),
 			Source:   "pulumi-yaml",

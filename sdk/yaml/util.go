@@ -11,6 +11,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 
 	"github.com/iwahbe/pulumi-lsp/sdk/lsp"
+	"github.com/iwahbe/pulumi-lsp/sdk/util"
 )
 
 func convertRange(r *hcl.Range) protocol.Range {
@@ -22,6 +23,11 @@ func convertRange(r *hcl.Range) protocol.Range {
 }
 
 func convertPosition(p hcl.Pos) protocol.Position {
+	var defPos hcl.Pos
+	var defProto protocol.Position
+	if p == defPos {
+		return defProto
+	}
 	contract.Assertf(p.Line != 0, "hcl.Pos line starts at 1")
 	return protocol.Position{
 		Line:      uint32(p.Line - 1),
@@ -74,7 +80,7 @@ type SchemaCache struct {
 	inner schema.Loader
 	c     lsp.Client
 	m     *sync.Mutex
-	cache map[Tuple[string, string]]*schema.Package
+	cache map[util.Tuple[string, string]]*schema.Package
 }
 
 type SchemaLoader struct {
@@ -88,7 +94,7 @@ func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.
 		v = version.String()
 	}
 	l.c.LogInfof("Loading package (%s,%s) ", pkg, v)
-	load, ok := l.cache.cache[Tuple[string, string]{pkg, v}]
+	load, ok := l.cache.cache[util.Tuple[string, string]{A: pkg, B: v}]
 	var err error
 	if ok {
 		l.c.LogErrorf("Returning cached pkg (%s,%s)", pkg, v)
@@ -100,15 +106,10 @@ func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.
 		}()
 		if err == nil {
 			l.c.LogInfof("Successfully loaded pkg (%s,%s)", pkg, v)
-			l.cache.cache[Tuple[string, string]{pkg, v}] = load
+			l.cache.cache[util.Tuple[string, string]{A: pkg, B: v}] = load
 		} else {
 			l.c.LogErrorf("Failed to load pkg (%s,%s): %s", pkg, v, err.Error())
 		}
 	}
 	return load, err
-}
-
-type Tuple[A any, B any] struct {
-	A A
-	B B
 }

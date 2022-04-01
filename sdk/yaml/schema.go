@@ -24,10 +24,8 @@ func (doc *document) objectAtPoint(pos protocol.Position) (Object, error) {
 		return nil, fmt.Errorf("Could not get parsed schema: nil result")
 	}
 	for _, r := range parsed.A.Resources.Entries {
-		tk := r.Value.Type
 		keyRange := r.Key.Syntax().Syntax().Range()
-		valueRange := r.Value.Syntax().Syntax().Range()
-		if posInRange(tk.Syntax().Syntax().Range(), pos) {
+		if r.Value != nil && r.Value.Type != nil && posInRange(r.Value.Type.Syntax().Syntax().Range(), pos) {
 			tk := r.Value.Type.Value
 			bound, ok := doc.analysis.bound.GetResult()
 			if !ok {
@@ -43,6 +41,7 @@ func (doc *document) objectAtPoint(pos protocol.Position) (Object, error) {
 			if len(res) == 0 {
 				return nil, nil
 			}
+			valueRange := r.Value.Syntax().Syntax().Range()
 			return Resource{
 				object: object{combineRange(convertRange(keyRange), convertRange(valueRange))},
 				schema: res[0].Schema(),
@@ -110,6 +109,9 @@ type Resource struct {
 
 func (r Resource) Describe() (protocol.MarkupContent, bool) {
 	b := &bytes.Buffer{}
+	if r.schema == nil {
+		return protocol.MarkupContent{}, false
+	}
 	writeResource(b, r.schema)
 	return protocol.MarkupContent{
 		Kind:  protocol.Markdown,
@@ -123,38 +125,15 @@ type Invoke struct {
 }
 
 func (f Invoke) Describe() (protocol.MarkupContent, bool) {
+	if f.schema == nil {
+		return protocol.MarkupContent{}, false
+	}
 	b := &bytes.Buffer{}
 	writeFunction(b, f.schema)
 	return protocol.MarkupContent{
 		Kind:  protocol.Markdown,
 		Value: b.String(),
 	}, true
-}
-
-func describeType(t schema.Type) protocol.MarkupContent {
-	markdown := func(body string) protocol.MarkupContent {
-		return protocol.MarkupContent{
-			Kind:  protocol.Markdown,
-			Value: body,
-		}
-	}
-	plain := func(body string, args ...interface{}) protocol.MarkupContent {
-		return protocol.MarkupContent{
-			Kind:  protocol.PlainText,
-			Value: fmt.Sprintf(body, args...),
-		}
-	}
-	if schema.IsPrimitiveType(t) {
-		return plain("%s (primitive)", t)
-	}
-	switch t := t.(type) {
-	case *schema.ResourceType:
-		b := &bytes.Buffer{}
-		writeResource(b, t.Resource)
-		return markdown(b.String())
-	default:
-		return plain("unknown type %s", t)
-	}
 }
 
 type Writer = func(msg string, args ...interface{})

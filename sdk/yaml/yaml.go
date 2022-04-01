@@ -2,6 +2,7 @@ package yaml
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"go.lsp.dev/protocol"
@@ -11,6 +12,8 @@ import (
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
+
+	"github.com/iwahbe/pulumi-lsp/sdk/util"
 )
 
 type server struct {
@@ -25,7 +28,7 @@ func Methods(host plugin.Host) *lsp.Methods {
 		loader: &SchemaCache{
 			inner: schema.NewPluginLoader(host),
 			m:     &sync.Mutex{},
-			cache: map[Tuple[string, string]]*schema.Package{},
+			cache: map[util.Tuple[string, string]]*schema.Package{},
 		},
 	}
 	return lsp.Methods{
@@ -136,12 +139,22 @@ func (s *server) completion(client lsp.Client, params *protocol.CompletionParams
 	if !ok {
 		return nil, fmt.Errorf("Could not find an opened document %s", uri.Filename())
 	}
+
+	typeFuncCompletion, err := s.completeType(client, doc, params)
+	if err != nil {
+		return nil, err
+	}
+	if typeFuncCompletion != nil {
+		return typeFuncCompletion, nil
+	}
+
 	o, err := doc.objectAtPoint(params.Position)
 	if err != nil {
 		client.LogErrorf(err.Error())
 		return nil, nil
 	}
 	client.LogInfof("Object found for completion: %v", o)
+	// We handle completion when the schema is fully parsed
 	if o, ok := o.(*Reference); ok {
 		ref, err := doc.text.Window(*o.Range())
 		if err != nil {
@@ -168,4 +181,129 @@ func (s *server) completion(client lsp.Client, params *protocol.CompletionParams
 		return &protocol.CompletionList{Items: list}, nil
 	}
 	return nil, nil
+}
+
+// We handle type completion without relying on a parsed schema. This is because that dangling `:` cause parse failures.
+// So `Type: ` and `Type: eks:` are all invalid.
+func (s *server) completeType(client lsp.Client, doc *document, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
+	pos := params.Position
+	line, err := doc.text.Line(int(pos.Line))
+	if err != nil {
+		return nil, err
+	}
+	window, err := doc.text.Window(line)
+	if err != nil {
+		return nil, err
+	}
+	window = strings.TrimSpace(window)
+
+	if strings.HasPrefix(window, "type:") {
+		currentWord := strings.TrimSpace(strings.TrimPrefix(window, "type:"))
+		// Don't know that this is, just dump out
+		if strings.Contains(currentWord, " \t") {
+			client.LogDebugf("To many spaces in current word: %#v", currentWord)
+			return nil, nil
+		}
+		parts := strings.Split(currentWord, ":")
+		client.LogInfof("Completing resource type: %v", parts)
+		switch len(parts) {
+		case 1, 0:
+			return s.pkgCompletionList(), nil
+		case 2:
+			pkg, err := s.GetLoader(client).LoadPackage(parts[0], nil)
+			if err != nil {
+				return nil, err
+			}
+			mods := moduleCompletionList(pkg)
+			client.LogDebugf("Found %d modules for %s", len(mods), pkg.Name)
+			return &protocol.CompletionList{
+				Items: append(mods, resourceCompletionList(pkg, "")...),
+			}, nil
+		case 3:
+			pkg, err := s.GetLoader(client).LoadPackage(parts[0], nil)
+			if err != nil {
+				return nil, err
+			}
+			return &protocol.CompletionList{
+				Items: resourceCompletionList(pkg, parts[1]),
+			}, nil
+		default:
+			client.LogDebugf("Found too many words to complete")
+			return nil, nil
+		}
+	}
+
+	if strings.HasPrefix(window, "Function:") {
+		client.LogWarningf("Function type completion not implemented yet")
+	}
+
+	return nil, nil
+}
+
+// Return the list of currently loaded packages.
+func (s *server) pkgCompletionList() *protocol.CompletionList {
+	s.loader.m.Lock()
+	defer s.loader.m.Unlock()
+	return &protocol.CompletionList{
+		Items: util.MapOver(util.MapValues(s.loader.cache), func(p *schema.Package) protocol.CompletionItem {
+			return protocol.CompletionItem{
+				CommitCharacters: []string{":"},
+				Documentation:    p.Description,
+				FilterText:       p.Name,
+				InsertText:       p.Name + ":",
+				InsertTextFormat: protocol.InsertTextFormatPlainText,
+				InsertTextMode:   protocol.InsertTextModeAsIs,
+				Kind:             protocol.CompletionItemKindModule,
+				Label:            p.Name,
+			}
+		}),
+	}
+}
+
+func moduleCompletionList(pkg *schema.Package) []protocol.CompletionItem {
+	m := map[string]bool{}
+	for _, r := range pkg.Resources {
+		s := pkg.TokenToModule(r.Token)
+		m[s] = m[s] || r.DeprecationMessage != ""
+	}
+	out := make([]protocol.CompletionItem, 0, len(m))
+	for mod, depreciated := range m {
+		full := pkg.Name + ":" + mod
+		out = append(out, protocol.CompletionItem{
+			CommitCharacters: []string{":"},
+			Deprecated:       depreciated,
+			FilterText:       full,
+			InsertText:       mod + ":",
+			InsertTextFormat: protocol.InsertTextFormatPlainText,
+			InsertTextMode:   protocol.InsertTextModeAsIs,
+			Kind:             protocol.CompletionItemKindModule,
+			Label:            mod,
+		})
+	}
+	return out
+}
+
+func resourceCompletionList(pkg *schema.Package, modHint string) []protocol.CompletionItem {
+	out := []protocol.CompletionItem{}
+	for _, r := range pkg.Resources {
+		mod := pkg.TokenToModule(r.Token)
+		parts := strings.Split(r.Token, ":")
+		name := parts[len(parts)-1]
+
+		// We want to use modHint as a prefix (a weak fuzzy filter), but only if
+		// modHint is "". When modHint is "", we interpret it as looking at the
+		// "index" module, so we need exact matches.
+		if (strings.HasPrefix(mod, modHint) && modHint != "") || mod == modHint {
+			out = append(out, protocol.CompletionItem{
+				Deprecated:       r.DeprecationMessage != "",
+				FilterText:       r.Token,
+				InsertText:       name,
+				InsertTextFormat: protocol.InsertTextFormatPlainText,
+				InsertTextMode:   protocol.InsertTextModeAsIs,
+				Kind:             protocol.CompletionItemKindClass,
+				Label:            name,
+			})
+		}
+	}
+	return out
 }

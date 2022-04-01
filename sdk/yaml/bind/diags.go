@@ -147,3 +147,19 @@ func missingRequiredPropDiag(prop *schema.Property, loc *hcl.Range) *hcl.Diagnos
 		Subject:  loc,
 	}
 }
+
+func missingResourceBodyDiag(name string, loc *hcl.Range) *hcl.Diagnostic {
+	return &hcl.Diagnostic{
+		Severity: hcl.DiagError,
+		Summary:  fmt.Sprintf("Resource %s is missing body statement", name),
+		Subject:  loc,
+	}
+}
+
+func missingResourceTypeDiag(name string, loc *hcl.Range) *hcl.Diagnostic {
+	return &hcl.Diagnostic{
+		Severity: hcl.DiagError,
+		Summary:  fmt.Sprintf("Resource %s is missing body a `type` key", name),
+		Subject:  loc,
+	}
+}

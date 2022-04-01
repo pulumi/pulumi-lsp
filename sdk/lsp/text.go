@@ -82,6 +82,25 @@ func (d *Document) Window(window protocol.Range) (string, error) {
 	return d.lines[sLine][sChar:] + strings.Join(d.lines[sLine+1:eLine], lineDeliminator) + d.lines[eLine][:eChar], nil
 }
 
+func (d *Document) Line(i int) (protocol.Range, error) {
+	if i <= 0 {
+		return protocol.Range{}, fmt.Errorf("Cannot access negative line")
+	}
+	if i >= len(d.lines) {
+		return protocol.Range{}, fmt.Errorf("Line index is %d but there are only %d lines", i, len(d.lines))
+	}
+	return protocol.Range{
+		Start: protocol.Position{
+			Line:      uint32(i),
+			Character: 0,
+		},
+		End: protocol.Position{
+			Line:      uint32(i),
+			Character: uint32(len(d.lines[i])),
+		},
+	}, nil
+}
+
 // Validate that the range is in the Text. Calling validateRange requires
 // holding any lock on the document.
 func (d *Document) validateRange(r protocol.Range) error {
@@ -118,10 +137,16 @@ func (d *Document) acceptChange(change protocol.TextDocumentContentChangeEvent) 
 	s := change.Range.Start
 	e := change.Range.End
 	contract.Assert(len(lines) != 0)
+
 	if s.Line == e.Line {
 		l := d.lines[s.Line]
 		if len(lines) == 1 {
-			// We can just change the one line
+			// We are replacing withing a line
+			if int(s.Character) > len(l) {
+				panic(fmt.Sprintf("s.Char{%d} > len(l){%d}: %#v:\n\n%#v\n%#v\n%#v",
+					int(s.Character), len(l), change, d.lines[s.Line-1], d.lines[s.Line], d.lines[s.Line+1]))
+
+			}
 			d.lines[s.Line] = l[:s.Character] + change.Text + l[e.Character:]
 			return nil
 		}
