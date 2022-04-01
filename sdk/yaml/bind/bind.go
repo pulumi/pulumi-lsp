@@ -41,6 +41,13 @@ type Variable struct {
 	// definition is either a Resource, *ast.ConfigParamDecl
 	definition Definition
 	uses       []Reference
+
+	// The variable name in the global namespace
+	name string
+}
+
+func (v *Variable) Name() string {
+	return v.name
 }
 
 func (v *Variable) Source() Definition {
@@ -58,7 +65,14 @@ type Reference struct {
 	access   PropertyAccessorList
 
 	variable *Variable
-	s        string
+	// A cache of how the variable is represented in text
+	s string
+}
+
+// Returns the property accessors that hang on the variable referenced.
+// If We have the symbol `${foo.bar}` then the function would return [bar].
+func (r *Reference) Accessors() PropertyAccessorList {
+	return r.access
 }
 
 func (r *Reference) Var() *Variable {
@@ -214,7 +228,7 @@ func (b *Decl) newRefernce(variable string, loc *hcl.Range, accessor []ast.Prope
 	}
 	ref := Reference{location: loc, access: l}
 	if !ok {
-		v = &Variable{uses: []Reference{}}
+		v = &Variable{name: variable, uses: []Reference{}}
 		b.variables[variable] = v
 	}
 	ref.variable = v
@@ -312,6 +326,7 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 			)
 		} else {
 			bound.variables[c.Key.Value] = &Variable{
+				name:       c.Key.Value,
 				definition: &ConfigMapEntry{c},
 			}
 		}
@@ -327,6 +342,7 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 			)
 		} else {
 			bound.variables[v.Key.Value] = &Variable{
+				name:       v.Key.Value,
 				definition: &VariableMapEntry{v},
 			}
 			err := bound.bind(v.Value)
@@ -493,12 +509,12 @@ func (d *Decl) bindInvoke(invoke *ast.InvokeExpr) error {
 
 func (d *Decl) bindResource(r ast.ResourcesMapEntry) error {
 	if r.Value == nil {
-		d.variables[r.Key.Value] = &Variable{definition: &Resource{defined: &r}}
+		d.variables[r.Key.Value] = &Variable{definition: &Resource{defined: &r}, name: r.Key.Value}
 		d.diags = append(d.diags, missingResourceBodyDiag(r.Key.Value, r.Key.Syntax().Syntax().Range()))
 		return nil
 	}
 	if r.Value.Type == nil {
-		d.variables[r.Key.Value] = &Variable{definition: &Resource{defined: &r}}
+		d.variables[r.Key.Value] = &Variable{definition: &Resource{defined: &r}, name: r.Key.Value}
 		d.diags = append(d.diags, missingResourceTypeDiag(r.Key.Value, r.Key.Syntax().Syntax().Range()))
 		return nil
 	}
@@ -522,7 +538,7 @@ func (d *Decl) bindResource(r ast.ResourcesMapEntry) error {
 	if err := d.bindResourceOptions(r.Value.Options); err != nil {
 		return err
 	}
-	d.variables[r.Key.Value] = &Variable{definition: &res}
+	d.variables[r.Key.Value] = &Variable{definition: &res, name: r.Key.Value}
 	return nil
 }
 
@@ -541,12 +557,16 @@ func (b *Decl) bindPropertyAccess(p *ast.PropertyAccess, loc *hcl.Range) error {
 	l := p.Accessors
 	if len(l) == 0 {
 		b.diags = append(b.diags, emptyPropertyAccessDiag(loc))
+		// We still take the reference so we can lookup this interpolation later.
+		b.newRefernce("", loc, nil, p.String())
 		return nil
 	}
 	if v, ok := p.Accessors[0].(*ast.PropertyName); ok {
 		b.newRefernce(v.Name, loc, l[1:], p.String())
 	} else {
 		b.diags = append(b.diags, propertyStartsWithIndexDiag(p, loc))
+		// We still take the reference so we can lookup this interpolation later.
+		b.newRefernce("", loc, nil, p.String())
 	}
 	return nil
 }

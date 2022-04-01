@@ -7,9 +7,10 @@ import (
 
 	"go.lsp.dev/protocol"
 
-	"github.com/iwahbe/pulumi-lsp/sdk/yaml/bind"
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
+
+	"github.com/iwahbe/pulumi-lsp/sdk/yaml/bind"
 )
 
 // Find the object at point, as well as it's location. An error indicates that
