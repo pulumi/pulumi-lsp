@@ -72,6 +72,7 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 
 	for _, v := range d.variables {
 		if v, ok := v.definition.(*Resource); ok {
+			v := *v
 			if v.defined.Value == nil || v.defined.Value.Type == nil {
 				// Type is not defined, so exit early
 				continue
@@ -83,7 +84,6 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 				if pkg.diag != nil {
 					// We don't have a valid package, so give an appropriate warning to the user and move on
 					d.diags = d.diags.Extend(pkg.diag(typeLoc))
-					continue
 				}
 				if !pkg.isValid() {
 					continue

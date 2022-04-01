@@ -337,7 +337,7 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 	}
 	for _, r := range decl.Resources.Entries {
 		other, alreadyReferenced := bound.variables[r.Key.Value]
-		if alreadyReferenced && other.definition != nil {
+		if alreadyReferenced {
 			bound.diags = bound.diags.Append(
 				duplicateSourceDiag(r.Key.Value,
 					r.Key.Syntax().Syntax().Range(),
@@ -345,7 +345,7 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 				),
 			)
 		} else {
-			if err := bound.bindResource(&r); err != nil {
+			if err := bound.bindResource(r); err != nil {
 				return nil, err
 			}
 		}
@@ -491,49 +491,38 @@ func (d *Decl) bindInvoke(invoke *ast.InvokeExpr) error {
 	return nil
 }
 
-func (b *Decl) bindResource(r *ast.ResourcesMapEntry) error {
-	if r == nil {
-		return nil
-	}
+func (d *Decl) bindResource(r ast.ResourcesMapEntry) error {
 	if r.Value == nil {
-		b.variables[r.Key.Value] = &Variable{definition: &Resource{defined: r}}
-		b.diags = append(b.diags, missingResourceBodyDiag(r.Key.Value, r.Key.Syntax().Syntax().Range()))
+		d.variables[r.Key.Value] = &Variable{definition: &Resource{defined: &r}}
+		d.diags = append(d.diags, missingResourceBodyDiag(r.Key.Value, r.Key.Syntax().Syntax().Range()))
 		return nil
 	}
 	if r.Value.Type == nil {
-		b.variables[r.Key.Value] = &Variable{definition: &Resource{defined: r}}
-		b.diags = append(b.diags, missingResourceTypeDiag(r.Key.Value, r.Key.Syntax().Syntax().Range()))
+		d.variables[r.Key.Value] = &Variable{definition: &Resource{defined: &r}}
+		d.diags = append(d.diags, missingResourceTypeDiag(r.Key.Value, r.Key.Syntax().Syntax().Range()))
 		return nil
 	}
 	res := Resource{
 		token:   r.Value.Type.Value,
-		defined: r,
+		defined: &r,
 	}
 	entries := map[string]bool{}
 	for _, entry := range r.Value.Properties.Entries {
 		k := entry.Key.Value
 		if entries[k] {
-			b.diags = append(b.diags, duplicateKeyDiag(k, entry.Key.Syntax().Syntax().Range()))
+			d.diags = append(d.diags, duplicateKeyDiag(k, entry.Key.Syntax().Syntax().Range()))
 		}
-		if err := b.bind(entry.Key); err != nil {
+		if err := d.bind(entry.Key); err != nil {
 			return err
 		}
-		if err := b.bind(entry.Value); err != nil {
+		if err := d.bind(entry.Value); err != nil {
 			return err
 		}
 	}
-	if err := b.bindResourceOptions(r.Value.Options); err != nil {
+	if err := d.bindResourceOptions(r.Value.Options); err != nil {
 		return err
 	}
-	if other, ok := b.variables[r.Key.Value]; ok {
-		b.diags = append(b.diags,
-			duplicateSourceDiag(
-				r.Key.Value,
-				r.Key.Syntax().Syntax().Range(),
-				other.definition.DefinitionRange()))
-	} else {
-		b.variables[r.Key.Value] = &Variable{definition: &res}
-	}
+	d.variables[r.Key.Value] = &Variable{definition: &res}
 	return nil
 }
 
