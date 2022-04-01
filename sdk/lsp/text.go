@@ -154,7 +154,16 @@ func (d *Document) acceptChange(change protocol.TextDocumentContentChangeEvent) 
 		end := l[e.Character:]
 		start := l[:s.Character] + lines[0]
 		lines[len(lines)-1] += end
-		d.lines = append(append(append(d.lines[:s.Line], start), lines...), d.lines[e.Line:]...)
+		d.lines = append(
+			append(
+				append(
+					d.lines[:s.Line], // Lines before the change
+					start,            // The first line changed combined with the first line of the new text
+				),
+				lines[1:]..., // The remaining lines of the new test. We exclude the first line since it is already part of start
+			),
+			d.lines[e.Line:]..., // Lines after the change
+		)
 		return nil
 	}
 	// Range is across multiple lines
