@@ -207,8 +207,9 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 		parts := strings.Split(currentWord, ":")
 		client.LogInfof("Completing resource type: %v", parts)
 		switch len(parts) {
-		case 1, 0:
-			return s.pkgCompletionList(), nil
+		case 1:
+			doPad := strings.TrimPrefix(window, "type:")
+			return s.pkgCompletionList(doPad == ""), nil
 		case 2:
 			pkg, err := s.GetLoader(client).LoadPackage(parts[0], nil)
 			if err != nil {
@@ -241,16 +242,20 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 }
 
 // Return the list of currently loaded packages.
-func (s *server) pkgCompletionList() *protocol.CompletionList {
+func (s *server) pkgCompletionList(pad bool) *protocol.CompletionList {
 	s.loader.m.Lock()
 	defer s.loader.m.Unlock()
 	return &protocol.CompletionList{
 		Items: util.MapOver(util.MapValues(s.loader.cache), func(p *schema.Package) protocol.CompletionItem {
+			insert := p.Name + ":"
+			if pad {
+				insert = " " + insert
+			}
 			return protocol.CompletionItem{
 				CommitCharacters: []string{":"},
 				Documentation:    p.Description,
 				FilterText:       p.Name,
-				InsertText:       p.Name + ":",
+				InsertText:       insert,
 				InsertTextFormat: protocol.InsertTextFormatPlainText,
 				InsertTextMode:   protocol.InsertTextModeAsIs,
 				Kind:             protocol.CompletionItemKindModule,

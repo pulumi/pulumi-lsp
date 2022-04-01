@@ -151,26 +151,36 @@ func (d *Document) acceptChange(change protocol.TextDocumentContentChangeEvent) 
 			return nil
 		}
 		// We need to add new lines
-		end := l[e.Character:]
 		start := l[:s.Character] + lines[0]
+		end := l[e.Character:]
+		lines[0] = start
 		lines[len(lines)-1] += end
-		d.lines = append(
-			append(
-				append(
-					d.lines[:s.Line], // Lines before the change
-					start,            // The first line changed combined with the first line of the new text
-				),
-				lines[1:]..., // The remaining lines of the new test. We exclude the first line since it is already part of start
-			),
-			d.lines[e.Line:]..., // Lines after the change
-		)
+		newLines := []string{}
+		for _, line := range d.lines[:s.Line] {
+			newLines = append(newLines, line)
+		}
+		for _, line := range lines {
+			newLines = append(newLines, line)
+		}
+		for _, line := range d.lines[e.Line+1:] {
+			newLines = append(newLines, line)
+		}
+		d.lines = newLines
 		return nil
 	}
 	// Range is across multiple lines
 	if len(lines) == 1 {
 		// Joining lines together
-		d.lines[s.Line] = d.lines[s.Line][:s.Character] + lines[0] + d.lines[e.Line][e.Character:]
-		d.lines = append(d.lines[:s.Line+1], d.lines[e.Line+1:]...)
+		join := d.lines[s.Line][:s.Character] + lines[0] + d.lines[e.Line][e.Character:]
+		newLines := []string{}
+		for _, line := range d.lines[:s.Line] {
+			newLines = append(newLines, line)
+		}
+		newLines = append(newLines, join)
+		for _, line := range d.lines[e.Line+1:] {
+			newLines = append(newLines, line)
+		}
+		d.lines = newLines
 		return nil
 	}
 	// multiple lines across a multi-line range

@@ -93,11 +93,11 @@ func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.
 	if version != nil {
 		v = version.String()
 	}
-	l.c.LogInfof("Loading package (%s,%s) ", pkg, v)
+	l.c.LogDebugf("Loading package (%s,%s) ", pkg, v)
 	load, ok := l.cache.cache[util.Tuple[string, string]{A: pkg, B: v}]
 	var err error
 	if ok {
-		l.c.LogErrorf("Returning cached pkg (%s,%s)", pkg, v)
+		l.c.LogDebugf("Returning cached pkg (%s,%s)", pkg, v)
 	} else {
 		func() {
 			l.cache.m.Lock()
