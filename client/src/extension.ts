@@ -16,7 +16,7 @@ let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
   const serverOptions: ServerOptions = {
-    command: path.join(process.env["GOBIN"], "pulumi-yaml-language-server"),
+    command: path.join(process.env["GOBIN"], "pulumi-lsp"),
   };
 
   // Options to control the language client
@@ -29,7 +29,7 @@ export function activate(context: ExtensionContext) {
 
   // Create the language client and start the client.
   const disposable = new LanguageClient(
-    "Language Server Example",
+    "Pulumi LSP",
     serverOptions,
     clientOptions,
   ).start();
@@ -37,4 +37,11 @@ export function activate(context: ExtensionContext) {
   // Push the disposable to the context's subscriptions so that the
   // client can be deactivated on extension deactivation
   context.subscriptions.push(disposable);
+}
+
+export function deactivate(): Thenable<void> | undefined {
+  if (!client) {
+    return undefined;
+  }
+  return client.stop();
 }

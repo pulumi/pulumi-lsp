@@ -14,12 +14,12 @@ writing [Pulumi YAML](https://github.com/pulumi/pulumi-yaml).
 
 ### Hover
 - [X] Resource info on hover
-- [ ] Invoke info on hover
+- [X] Invoke info on hover
 - [ ] Highlight the variable at point across the file
 
 ### Completion
 - [ ] When entering input properties for a resource
-- [ ] When entering a `type` field (after the package)
+- [X] When entering a `type` field 
 - [ ] After typing `.` on a resource variable
 - [ ] On the return value for invokes
 
@@ -33,13 +33,12 @@ The server is theoretically deployable to any editor that supports LSP.
 ### VS Code
 
 Because [VS Code](https://code.visualstudio.com) is the most common editor, I
-used it for initial testing. There is a `.vscode` folder that contains the
-necessary plugin description to run the server.
+used it for initial testing. So far, I launch the vs-code plugin by opening
+`client/src/extension.ts` in vscode and hitting F5.
 
 ### Emacs
 
-I hope to have a fully functioning mode for
-[emacs](https://www.gnu.org/software/emacs/) by end of project, since then I can
-actually use the application. I plan to test using
-[emacs-lsp](https://emacs-lsp.github.io/lsp-mode/), but other LSP packages
-([eglot](https://github.com/joaotavora/eglot)) should also work.
+`pulumi-yaml.el` provides a major mode for editing Pulumi YAML which should be
+auto-invoked on relevant documents. It also associates a LSP server
+[emacs-lsp](https://emacs-lsp.github.io/lsp-mode/) which can be launched the
+usual way: `M-x lsp`.

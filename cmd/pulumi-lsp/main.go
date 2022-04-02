@@ -19,6 +19,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer func() {
+		if err := host.Close(); err != nil {
+			panic(err)
+		}
+	}()
 	server := lsp.NewServer(yaml.Methods(host), &stdio{false})
 	err = server.Run()
 	if err != nil {
