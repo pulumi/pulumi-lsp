@@ -99,6 +99,16 @@ func (m Methods) DefaultInitializer(name, version string) *Methods {
 				},
 			}
 		}
+		var codeAction *protocol.CodeActionOptions
+		if m.CodeActionFunc != nil {
+			codeAction = &protocol.CodeActionOptions{
+				CodeActionKinds: []protocol.CodeActionKind{
+					// TODO: how do we let the user communicate this.
+					protocol.RefactorRewrite,
+				},
+				ResolveProvider: false,
+			}
+		}
 		return &protocol.InitializeResult{
 			Capabilities: protocol.ServerCapabilities{
 				TextDocumentSync: &protocol.TextDocumentSyncOptions{
@@ -120,7 +130,7 @@ func (m Methods) DefaultInitializer(name, version string) *Methods {
 				// ReferencesProvider:               nil,
 				// DocumentHighlightProvider:        nil,
 				// DocumentSymbolProvider:           nil,
-				// CodeActionProvider:               nil,
+				CodeActionProvider: codeAction,
 				// CodeLensProvider:                 &protocol.CodeLensOptions{},
 				// DocumentLinkProvider:             &protocol.DocumentLinkOptions{},
 				// ColorProvider:                    nil,
