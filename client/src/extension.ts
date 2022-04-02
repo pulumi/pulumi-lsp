@@ -28,20 +28,20 @@ export function activate(context: ExtensionContext) {
   };
 
   // Create the language client and start the client.
-  const disposable = new LanguageClient(
+  client = new LanguageClient(
+    "pulumi-lsp",
     "Pulumi LSP",
     serverOptions,
     clientOptions,
-  ).start();
+  );
 
-  // Push the disposable to the context's subscriptions so that the
-  // client can be deactivated on extension deactivation
-  context.subscriptions.push(disposable);
+  client.start();
 }
 
 export function deactivate(): Thenable<void> | undefined {
   if (!client) {
     return undefined;
   }
+
   return client.stop();
 }
