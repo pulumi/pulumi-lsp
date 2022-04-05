@@ -1,5 +1,6 @@
 // Copyright 2022, Pulumi Corporation.  All rights reserved.
 
+// The logic specific to Pulumi YAML.
 package yaml
 
 import (
@@ -10,22 +11,23 @@ import (
 
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
-	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 
 	"github.com/pulumi/pulumi-lsp/sdk/lsp"
 	"github.com/pulumi/pulumi-lsp/sdk/util"
 )
 
+// The holder of state between method calls.
 type server struct {
 	docs map[protocol.DocumentURI]*document
 
-	loader *SchemaCache
+	schemas *SchemaCache
 }
 
+// Create the set of methods necessary to implement a LSP server for Pulumi YAML.
 func Methods(host plugin.Host) *lsp.Methods {
 	server := &server{
 		docs: map[protocol.DocumentURI]*document{},
-		loader: &SchemaCache{
+		schemas: &SchemaCache{
 			inner: schema.NewPluginLoader(host),
 			m:     &sync.Mutex{},
 			cache: map[util.Tuple[string, string]]*schema.Package{},
@@ -51,25 +53,24 @@ func (s *server) getDocument(uri protocol.DocumentURI) (*document, bool) {
 	return d, ok
 }
 
+// The representation of a document as used by the server.
 type document struct {
+	// The actual text of the document.
 	text lsp.Document
 
+	// A back-link to the server
 	server *server
 
+	// A handle to the currently executing analysis pipeline.
 	analysis *documentAnalysisPipeline
 }
 
-// Returns a loader. The cancel function must be called when done with the loader.
-func (s *server) GetLoader(c lsp.Client) schema.Loader {
-	contract.Assert(s.loader.m != nil)
-	return SchemaLoader{s.loader, c}
-}
-
+// Starts an analysis process for the document.
 func (d *document) process(c lsp.Client) {
 	if d.analysis != nil {
 		d.analysis.cancel()
 	}
-	loader := d.server.GetLoader(c)
+	loader := d.server.schemas.Loader(c)
 	d.analysis = NewDocumentAnalysisPipeline(c, d.text, loader)
 }
 

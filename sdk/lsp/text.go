@@ -27,6 +27,7 @@ type Document struct {
 	languageID protocol.LanguageIdentifier
 }
 
+// Create a new document from a TextDocumentItem.
 func NewDocument(item protocol.TextDocumentItem) Document {
 	return Document{
 		lines:      strings.Split(item.Text, lineDeliminator),
@@ -38,6 +39,7 @@ func NewDocument(item protocol.TextDocumentItem) Document {
 	}
 }
 
+// Update the document with the given changes.
 func (t *Document) AcceptChanges(changes []protocol.TextDocumentContentChangeEvent) error {
 	t.m.Lock()
 	defer t.m.Unlock()
@@ -52,6 +54,7 @@ func (t *Document) AcceptChanges(changes []protocol.TextDocumentContentChangeEve
 
 const lineDeliminator = "\n"
 
+// Retrieve the URI of the Document.
 func (d *Document) URI() protocol.DocumentURI {
 	return d.uri
 }
@@ -84,23 +87,16 @@ func (d *Document) Window(window protocol.Range) (string, error) {
 	return d.lines[sLine][sChar:] + strings.Join(d.lines[sLine+1:eLine], lineDeliminator) + d.lines[eLine][:eChar], nil
 }
 
-func (d *Document) Line(i int) (protocol.Range, error) {
-	if i <= 0 {
-		return protocol.Range{}, fmt.Errorf("Cannot access negative line")
+// Retrieve a specific line in the document. If the index is out of range (or
+// negative), an error is returned.
+func (d *Document) Line(i int) (string, error) {
+	if i < 0 {
+		return "", fmt.Errorf("Cannot access negative line")
 	}
 	if i >= len(d.lines) {
-		return protocol.Range{}, fmt.Errorf("Line index is %d but there are only %d lines", i, len(d.lines))
+		return "", fmt.Errorf("Line index is %d but there are only %d lines", i, len(d.lines))
 	}
-	return protocol.Range{
-		Start: protocol.Position{
-			Line:      uint32(i),
-			Character: 0,
-		},
-		End: protocol.Position{
-			Line:      uint32(i),
-			Character: uint32(len(d.lines[i])),
-		},
-	}, nil
+	return d.lines[i], nil
 }
 
 // Validate that the range is in the Text. Calling validateRange requires

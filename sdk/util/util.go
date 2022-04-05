@@ -2,9 +2,10 @@
 
 package util
 
-func MapOver[T any, U any](in []T, f func(T) U) []U {
-	l := make([]U, len(in))
-	for i, t := range in {
+// Map f over arr.
+func MapOver[T any, U any, F func(T) U](arr []T, f F) []U {
+	l := make([]U, len(arr))
+	for i, t := range arr {
 		l[i] = f(t)
 	}
 	return l
@@ -15,15 +16,17 @@ type Tuple[A any, B any] struct {
 	B B
 }
 
-func SliceContains[T comparable](slice []T, el T) bool {
+// Check if slice contains the element.
+func SliceContains[T comparable](slice []T, element T) bool {
 	for _, t := range slice {
-		if t == el {
+		if t == element {
 			return true
 		}
 	}
 	return false
 }
 
+// Retrieve the keys of a map in any order.
 func MapKeys[K comparable, V any](m map[K]V) []K {
 	arr := make([]K, len(m))
 	i := 0
@@ -34,6 +37,7 @@ func MapKeys[K comparable, V any](m map[K]V) []K {
 	return arr
 }
 
+// Retrieve the values of a map in any order.
 func MapValues[K comparable, V any](m map[K]V) []V {
 	arr := make([]V, len(m))
 	i := 0
@@ -44,10 +48,7 @@ func MapValues[K comparable, V any](m map[K]V) []V {
 	return arr
 }
 
+// Dereference each element in a list.
 func DerefList[T any](l []*T) []T {
-	ls := make([]T, len(l))
-	for i := range l {
-		ls[i] = *l[i]
-	}
-	return ls
+	return MapOver(l, func(t *T) T { return *t })
 }

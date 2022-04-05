@@ -9,7 +9,9 @@ import (
 	"go.lsp.dev/protocol"
 )
 
-// Methods provides the interface to define methods for the LSP server.
+// Methods provides the interface to define methods for the LSP server. When the
+// lsp server calls a method that is not provided, it will log a warning and
+// return the zero value for the method's return type.
 type Methods struct {
 	// A pointer back to the server
 	server *Server
@@ -80,7 +82,8 @@ type Methods struct {
 
 // Guess what capabilities should be enabled from what functions are registered.
 //
-// This function will panic if a `InitializeFunc` is already set.
+// NOTE: To be accurate, this method should be called on an otherwise fully initialized *Methods.
+// NOTE: This function will panic if a `InitializeFunc` is already set.
 func (m Methods) DefaultInitializer(name, version string) *Methods {
 	contract.Assertf(m.InitializeFunc == nil, "Won't override an already set initializer")
 	m.InitializeFunc = func(client Client, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {

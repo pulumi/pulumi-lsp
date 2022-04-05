@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"os"
 
@@ -25,7 +26,7 @@ func main() {
 		}
 	}()
 	server := lsp.NewServer(yaml.Methods(host), &stdio{false})
-	err = server.Run()
+	err = server.Run(context.Background())
 	if err != nil {
 		panic(err)
 	}

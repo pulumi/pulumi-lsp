@@ -9,6 +9,8 @@ import (
 	"go.lsp.dev/protocol"
 )
 
+// Client represents a LSP client to a Server. It is passed to all methods and
+// is used to post non-requested responses to the server.
 type Client struct {
 	inner protocol.Client
 	ctx   context.Context
@@ -20,6 +22,13 @@ func (c *Client) Progress(params *protocol.ProgressParams) error {
 func (c *Client) WorkDoneProgressCreate(params *protocol.WorkDoneProgressCreateParams) error {
 	return c.inner.WorkDoneProgressCreate(c.ctx, params)
 }
+
+// Publish diagnostic messages to the user. This is how errors and warnings are
+// displayed. Every time diagnostics are published, the complete list of current
+// diagnostics must be published. Diagnostics persist until a new set of
+// diagnostics are published.
+//
+// To clear all diagnostics, publish an empty list of diagnostics.
 func (c *Client) PublishDiagnostics(params *protocol.PublishDiagnosticsParams) error {
 	return c.inner.PublishDiagnostics(c.ctx, params)
 }
@@ -80,6 +89,7 @@ func (c *Client) LogDebugf(msg string, args ...interface{}) error {
 	return c.logMessage(protocol.MessageTypeLog, fmt.Sprintf(msg, args...))
 }
 
+// Retrieve the Context of method that Client was passed with.
 func (c *Client) Context() context.Context {
 	return c.ctx
 }

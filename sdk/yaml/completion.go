@@ -15,6 +15,7 @@ import (
 	"github.com/pulumi/pulumi-lsp/sdk/yaml/bind"
 )
 
+// Tries to provide completion withing symbols and references.
 func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) (*protocol.CompletionList, error) {
 	refTxt, err := doc.text.Window(*ref.Range())
 	if err != nil {
@@ -69,6 +70,12 @@ func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) 
 	return nil, nil
 }
 
+// Completion for the properties of a type. `filterPrefix` is pre-appended to
+// all results to prevent the filter from being eaten by the host.
+//
+// For example:
+//   typePropertyCompletion(type({foo: string, bar: int}), "someType.") would
+//   complete to ["someType.foo", "someType.bar"].
 func (s *server) typePropertyCompletion(t schema.Type, filterPrefix string) (*protocol.CompletionList, error) {
 	switch t := codegen.UnwrapType(t).(type) {
 	case *schema.ResourceType:
@@ -77,15 +84,16 @@ func (s *server) typePropertyCompletion(t schema.Type, filterPrefix string) (*pr
 		if r.InputProperties != nil {
 			l = append(l, r.InputProperties...)
 		}
-		return s.typePropertyFromPropertyList(l, filterPrefix)
+		return s.propertyListCompletion(l, filterPrefix)
 	case *schema.ObjectType:
-		return s.typePropertyFromPropertyList(t.Properties, filterPrefix)
+		return s.propertyListCompletion(t.Properties, filterPrefix)
 	default:
 		return nil, nil
 	}
 }
 
-func (s *server) typePropertyFromPropertyList(l []*schema.Property, filterPrefix string) (*protocol.CompletionList, error) {
+// Retruns the completion optsion for a property list. filterPrefix is pre-appended to the filter property of all results.
+func (s *server) propertyListCompletion(l []*schema.Property, filterPrefix string) (*protocol.CompletionList, error) {
 	items := make([]protocol.CompletionItem, 0, len(l))
 	for _, prop := range l {
 		typ := codegen.UnwrapType(prop.Type)
@@ -113,22 +121,19 @@ func (s *server) typePropertyFromPropertyList(l []*schema.Property, filterPrefix
 	return &protocol.CompletionList{Items: items}, nil
 }
 
-// We handle type completion without relying on a parsed schema. This is because that dangling `:` cause parse failures.
-// So `Type: ` and `Type: eks:` are all invalid.
+// We handle type completion without relying on a parsed schema. This is because
+// that dangling `:` causes parse failures. `Type: ` and `Type: eks:` are all
+// invalid.
 func (s *server) completeType(client lsp.Client, doc *document, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
 	pos := params.Position
 	line, err := doc.text.Line(int(pos.Line))
 	if err != nil {
 		return nil, err
 	}
-	window, err := doc.text.Window(line)
-	if err != nil {
-		return nil, err
-	}
-	window = strings.TrimSpace(window)
+	line = strings.TrimSpace(line)
 
-	if strings.HasPrefix(window, "type:") {
-		currentWord := strings.TrimSpace(strings.TrimPrefix(window, "type:"))
+	if strings.HasPrefix(line, "type:") {
+		currentWord := strings.TrimSpace(strings.TrimPrefix(line, "type:"))
 		// Don't know that this is, just dump out
 		if strings.Contains(currentWord, " \t") {
 			client.LogDebugf("To many spaces in current word: %#v", currentWord)
@@ -138,10 +143,10 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 		client.LogInfof("Completing resource type: %v", parts)
 		switch len(parts) {
 		case 1:
-			doPad := strings.TrimPrefix(window, "type:")
+			doPad := strings.TrimPrefix(line, "type:")
 			return s.pkgCompletionList(doPad == ""), nil
 		case 2:
-			pkg, err := s.GetLoader(client).LoadPackage(parts[0], nil)
+			pkg, err := s.schemas.Loader(client).LoadPackage(parts[0], nil)
 			if err != nil {
 				return nil, err
 			}
@@ -151,7 +156,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 				Items: append(mods, resourceCompletionList(pkg, "")...),
 			}, nil
 		case 3:
-			pkg, err := s.GetLoader(client).LoadPackage(parts[0], nil)
+			pkg, err := s.schemas.Loader(client).LoadPackage(parts[0], nil)
 			if err != nil {
 				return nil, err
 			}
@@ -164,7 +169,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 		}
 	}
 
-	if strings.HasPrefix(window, "Function:") {
+	if strings.HasPrefix(line, "Function:") {
 		client.LogWarningf("Function type completion not implemented yet")
 	}
 
@@ -173,10 +178,10 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 
 // Return the list of currently loaded packages.
 func (s *server) pkgCompletionList(pad bool) *protocol.CompletionList {
-	s.loader.m.Lock()
-	defer s.loader.m.Unlock()
+	s.schemas.m.Lock()
+	defer s.schemas.m.Unlock()
 	return &protocol.CompletionList{
-		Items: util.MapOver(util.MapValues(s.loader.cache), func(p *schema.Package) protocol.CompletionItem {
+		Items: util.MapOver(util.MapValues(s.schemas.cache), func(p *schema.Package) protocol.CompletionItem {
 			insert := p.Name + ":"
 			if pad {
 				insert = " " + insert
@@ -195,6 +200,7 @@ func (s *server) pkgCompletionList(pad bool) *protocol.CompletionList {
 	}
 }
 
+// Return the completion list of modules for a given package.
 func moduleCompletionList(pkg *schema.Package) []protocol.CompletionItem {
 	m := map[string]bool{}
 	for _, r := range pkg.Resources {
@@ -218,6 +224,9 @@ func moduleCompletionList(pkg *schema.Package) []protocol.CompletionItem {
 	return out
 }
 
+// The completion list of resources for a package. Only packages whose module is
+// prefixed by modHint are returned. If modHint is empty, then only resources in
+// the `index` namespace are returned.
 func resourceCompletionList(pkg *schema.Package, modHint string) []protocol.CompletionItem {
 	out := []protocol.CompletionItem{}
 	for _, r := range pkg.Resources {

@@ -21,7 +21,11 @@ import (
 	"github.com/pulumi/pulumi-lsp/sdk/util"
 )
 
+// A bound template.
+//
+// NOTE: the binding need not be complete, and the template need not be valid.
 type Decl struct {
+	// All names in the global namespace.
 	variables map[string]*Variable
 
 	// The output namespace

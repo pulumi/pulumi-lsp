@@ -50,6 +50,7 @@ func (d *Decl) Invokes() []Invoke {
 	return util.DerefList(util.MapKeys(d.invokes))
 }
 
+// Retrieve the diagnostic list for the Decl.
 func (b *Decl) Diags() hcl.Diagnostics {
 	if b == nil {
 		return nil
@@ -57,6 +58,7 @@ func (b *Decl) Diags() hcl.Diagnostics {
 	return b.diags
 }
 
+// Return a list of all variable references bound in the Decl.
 func (d *Decl) References() []Reference {
 	refs := []Reference{}
 	for _, v := range d.variables {
@@ -65,6 +67,7 @@ func (d *Decl) References() []Reference {
 	return refs
 }
 
+// Return a list of all variables bound in the Decl.
 func (d *Decl) Variables() map[string]*Variable {
 	return d.variables
 }
