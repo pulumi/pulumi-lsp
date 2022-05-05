@@ -2,6 +2,7 @@
 package yaml
 
 import (
+	"fmt"
 	"strings"
 
 	"go.lsp.dev/protocol"
@@ -24,7 +25,12 @@ func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) 
 	accessors := ref.ref.Accessors()
 	b, ok := doc.analysis.bound.GetResult()
 	contract.Assertf(ok, "Should have exited already if the bind task failed")
-	if len(accessors) == 0 {
+
+	// We go through this song and dance to figure out if a property access list
+	// ends in a "."
+	plainReference := strings.TrimPrefix(refTxt, "${")
+	plainReference = strings.TrimSuffix(refTxt, "}")
+	if len(accessors) == 0 && !strings.HasSuffix(plainReference, ".") {
 		// We are binding a ref at the top level. We iterate over all top level
 		// objects.
 		c.LogInfof("Completing %s as reference in the global namespace", refTxt)
@@ -47,22 +53,15 @@ func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) 
 	} else if v := ref.ref.Var(); v != nil {
 		// We have an associated variable, and are not at the top level. We
 		// should try to drill into the variable.
-		varType := v.Source().ResolveType(b.A)
-		if varType != nil {
+		varRoot := v.Source().ResolveType(b.A)
+		if varRoot != nil {
 			// Don't bother with the error message, it will have already been
 			// displayed.
-			c.LogInfof("Completing %s as reference to a variable", refTxt)
-			if len(accessors) == 1 {
-				l, err := s.typePropertyCompletion(varType, v.Name()+".")
-				c.LogInfof("One accessor: %v", l)
-				return l, err
-			} else {
-				types, _ := accessors.Typed(varType)
-				last := types[len(types)-2]
-				if last != nil {
-					return s.typePropertyCompletion(last, "")
-				}
-			}
+			c.LogInfof("Completing %s as reference to a variable (%s)", refTxt, ref.ref.Var().Name())
+			types, _ := accessors.TypeFromRoot(varRoot)
+			c.LogInfof("Found types: %v", types)
+			// Return a completion generated from the last type
+			return s.typePropertyCompletion(types[len(types)-1], "")
 		}
 		c.LogWarningf("Could not complete for %s: could not resolve a variable type", refTxt)
 	}
@@ -96,29 +95,105 @@ func (s *server) typePropertyCompletion(t schema.Type, filterPrefix string) (*pr
 func (s *server) propertyListCompletion(l []*schema.Property, filterPrefix string) (*protocol.CompletionList, error) {
 	items := make([]protocol.CompletionItem, 0, len(l))
 	for _, prop := range l {
-		typ := codegen.UnwrapType(prop.Type)
-		kind := protocol.CompletionItemKindField
-		switch typ.(type) {
-		case *schema.ResourceType:
-			kind = protocol.CompletionItemKindClass
-		case *schema.ObjectType:
-			kind = protocol.CompletionItemKindStruct
-		}
-		if typ == schema.StringType {
-			kind = protocol.CompletionItemKindText
-		}
-		items = append(items, protocol.CompletionItem{
-			CommitCharacters: []string{".", "["},
-			Deprecated:       prop.DeprecationMessage != "",
-			FilterText:       filterPrefix + prop.Name,
-			InsertText:       prop.Name,
-			InsertTextFormat: protocol.InsertTextFormatPlainText,
-			InsertTextMode:   protocol.InsertTextModeAsIs,
-			Kind:             kind,
-			Label:            prop.Name,
-		})
+		// Derive item from type
+		item := completionItemFromType(prop.Type)
+		// then set property level defaults
+		item.CommitCharacters = []string{".", "["}
+		item.Deprecated = prop.DeprecationMessage != ""
+		item.FilterText = filterPrefix + prop.Name
+		item.InsertText = prop.Name
+		item.InsertTextFormat = protocol.InsertTextFormatPlainText
+		item.InsertTextMode = protocol.InsertTextModeAsIs
+		item.Label = prop.Name
+
+		items = append(items, item)
 	}
 	return &protocol.CompletionList{Items: items}, nil
+}
+
+func completionItemFromType(t schema.Type) protocol.CompletionItem {
+	t = codegen.UnwrapType(t)
+	switch t {
+	case schema.StringType:
+		return protocol.CompletionItem{
+			Kind:   protocol.CompletionItemKindText,
+			Detail: "String",
+		}
+	case schema.ArchiveType:
+		return protocol.CompletionItem{
+			Kind:   protocol.CompletionItemKindFile,
+			Detail: "Archive",
+		}
+	case schema.AssetType:
+		return protocol.CompletionItem{
+			Kind:   protocol.CompletionItemKindFile,
+			Detail: "Asset",
+		}
+	case schema.BoolType:
+		return protocol.CompletionItem{
+			Kind:   protocol.CompletionItemKindValue,
+			Detail: "Boolean",
+		}
+	case schema.IntType:
+		fallthrough
+	case schema.NumberType:
+		return protocol.CompletionItem{
+			Kind:   protocol.CompletionItemKindValue,
+			Detail: "Number",
+		}
+	case schema.AnyType:
+		return protocol.CompletionItem{
+			Kind:   protocol.CompletionItemKindValue,
+			Detail: "Any",
+		}
+	}
+	switch t := t.(type) {
+	case *schema.ResourceType:
+		var documentation string
+		if t.Resource != nil {
+			documentation = t.Resource.Comment
+		}
+		return protocol.CompletionItem{
+			Kind:          protocol.CompletionItemKindClass,
+			Detail:        fmt.Sprintf("resource %s", t.Token),
+			Documentation: documentation,
+		}
+	case *schema.ObjectType:
+		return protocol.CompletionItem{
+			Kind:          protocol.CompletionItemKindInterface,
+			Detail:        fmt.Sprintf("object %s", t.Token),
+			Documentation: t.Comment,
+		}
+	case *schema.UnionType:
+		var detail string
+		if len(t.ElementTypes) == 0 {
+			detail = completionItemFromType(t.ElementTypes[0]).Detail
+			for i := 1; i < len(t.ElementTypes); i++ {
+				detail += "| " + completionItemFromType(t.ElementTypes[i]).Detail
+			}
+		}
+		return protocol.CompletionItem{
+			Kind:   protocol.CompletionItemKindValue,
+			Detail: detail,
+		}
+	case *schema.EnumType:
+		return protocol.CompletionItem{
+			Kind:   protocol.CompletionItemKindEnum,
+			Detail: fmt.Sprintf("enum %s", t.Token),
+		}
+	case *schema.ArrayType:
+		inner := completionItemFromType(t.ElementType)
+		inner.Detail = fmt.Sprintf("List<%s>", inner.Detail)
+		inner.Kind = protocol.CompletionItemKindVariable
+		return inner
+	case *schema.MapType:
+		inner := completionItemFromType(t.ElementType)
+		inner.Detail = fmt.Sprintf("Map<%s>", inner.Detail)
+		inner.Kind = protocol.CompletionItemKindVariable
+		return inner
+	default:
+		return protocol.CompletionItem{}
+	}
 }
 
 // We handle type completion without relying on a parsed schema. This is because

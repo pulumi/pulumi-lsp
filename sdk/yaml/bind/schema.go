@@ -166,7 +166,7 @@ func (d *Decl) typeExpr(e ast.Expr) schema.Type {
 			}
 			for _, r := range v.uses {
 				if r.location == e.Syntax().Syntax().Range() {
-					types, _ := r.access.Typed(t)
+					types, _ := r.access.TypeFromRoot(t)
 					return types[len(types)-1]
 				}
 			}
@@ -281,7 +281,7 @@ func (d *Decl) verifyPropertyAccess(expr PropertyAccessorList, typ schema.Type) 
 	if len(expr) == 0 {
 		return
 	}
-	_, diag := expr.Typed(typ)
+	_, diag := expr.TypeFromRoot(typ)
 	if diag != nil {
 		d.diags = append(d.diags, diag)
 	}
