@@ -77,12 +77,14 @@ func NewDocumentAnalysisPipeline(c lsp.Client, text lsp.Document, loader schema.
 
 		d.parse(text)
 		step.After(d.parsed, func(util.Tuple[*ast.TemplateDecl, syntax.Diagnostics]) {
-			contract.IgnoreError(d.sendDiags(c, text.URI()))
+			err := d.sendDiags(c, text.URI())
+			contract.IgnoreError(err)
 		})
 
 		d.bound = step.Then(d.parsed, d.bind)
 		step.After(d.bound, func(util.Tuple[*bind.Decl, *syntax.Diagnostic]) {
-			contract.IgnoreError(d.sendDiags(c, text.URI()))
+			err := d.sendDiags(c, text.URI())
+			contract.IgnoreError(err)
 		})
 
 		schematize := step.Then(d.bound, func(t util.Tuple[*bind.Decl, *syntax.Diagnostic]) (struct{}, bool) {
@@ -93,7 +95,8 @@ func NewDocumentAnalysisPipeline(c lsp.Client, text lsp.Document, loader schema.
 			return struct{}{}, false
 		})
 		step.After(schematize, func(struct{}) {
-			contract.IgnoreError(d.sendDiags(c, text.URI()))
+			err := d.sendDiags(c, text.URI())
+			contract.IgnoreError(err)
 		})
 	}(c, text, loader)
 	return d

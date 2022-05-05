@@ -41,10 +41,17 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 					d.diags = d.diags.Extend(f.diag(typeLoc))
 				}
 				invoke.definition = f.Function
-				d.validateProperties(util.MapOver(invoke.defined.CallArgs.Entries, func(o ast.ObjectProperty) MapKey {
+				inputs := []*schema.Property{}
+				if i := f.Function.Inputs; i != nil && i.Properties != nil {
+					inputs = i.Properties
+				}
+				args := ast.Object()
+				if a := invoke.defined.CallArgs; a != nil {
+					args = a
+				}
+				d.validateProperties(util.MapOver(args.Entries, func(o ast.ObjectProperty) MapKey {
 					return MapKey{o.Key.(*ast.StringExpr).Value, o.Key.Syntax().Syntax().Range()}
-				}), f.Function.Inputs.Properties, f.Token,
-					invoke.defined.CallArgs.Syntax().Syntax().Range())
+				}), inputs, f.Token, args.Syntax().Syntax().Range())
 				if ret := invoke.defined.Return; ret != nil {
 					if out := f.Function.Outputs; out != nil {
 						var valid bool
