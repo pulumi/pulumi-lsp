@@ -92,7 +92,7 @@ func (s *server) typePropertyCompletion(t schema.Type, filterPrefix string) (*pr
 	}
 }
 
-// Retruns the completion optsion for a property list. filterPrefix is pre-appended to the filter property of all results.
+// Returns the completion option for a property list. filterPrefix is pre-appended to the filter property of all results.
 func (s *server) propertyListCompletion(l []*schema.Property, filterPrefix string) (*protocol.CompletionList, error) {
 	items := make([]protocol.CompletionItem, 0, len(l))
 	for _, prop := range l {
@@ -132,48 +132,51 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 	}
 	line = strings.TrimSpace(line)
 
-	if strings.HasPrefix(line, "type:") {
-		currentWord := strings.TrimSpace(strings.TrimPrefix(line, "type:"))
-		// Don't know that this is, just dump out
-		if strings.Contains(currentWord, " \t") {
-			client.LogDebugf("To many spaces in current word: %#v", currentWord)
-			return nil, nil
-		}
-		parts := strings.Split(currentWord, ":")
-		client.LogInfof("Completing resource type: %v", parts)
-		switch len(parts) {
-		case 1:
-			doPad := strings.TrimPrefix(line, "type:")
-			return s.pkgCompletionList(doPad == ""), nil
-		case 2:
-			pkg, err := s.schemas.Loader(client).LoadPackage(parts[0], nil)
-			if err != nil {
-				return nil, err
+	handleType := func(prefix string, resolve func(*schema.Package, string) []protocol.CompletionItem) (*protocol.CompletionList, error) {
+		if strings.HasPrefix(line, prefix) {
+			currentWord := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+			// Don't know that this is, just dump out
+			if strings.Contains(currentWord, " \t") {
+				client.LogDebugf("To many spaces in current word: %#v", currentWord)
+				return nil, nil
 			}
-			mods := moduleCompletionList(pkg)
-			client.LogDebugf("Found %d modules for %s", len(mods), pkg.Name)
-			return &protocol.CompletionList{
-				Items: append(mods, resourceCompletionList(pkg, "")...),
-			}, nil
-		case 3:
-			pkg, err := s.schemas.Loader(client).LoadPackage(parts[0], nil)
-			if err != nil {
-				return nil, err
+			parts := strings.Split(currentWord, ":")
+			client.LogInfof("Completing %v", parts)
+			switch len(parts) {
+			case 1:
+				doPad := strings.TrimPrefix(line, prefix)
+				return s.pkgCompletionList(doPad == ""), nil
+			case 2:
+				pkg, err := s.schemas.Loader(client).LoadPackage(parts[0], nil)
+				if err != nil {
+					return nil, err
+				}
+				mods := moduleCompletionList(pkg)
+				client.LogDebugf("Found %d modules for %s", len(mods), pkg.Name)
+				return &protocol.CompletionList{
+					Items: append(mods, resolve(pkg, "")...),
+				}, nil
+			case 3:
+				pkg, err := s.schemas.Loader(client).LoadPackage(parts[0], nil)
+				if err != nil {
+					return nil, err
+				}
+				return &protocol.CompletionList{
+					Items: resolve(pkg, parts[1]),
+				}, nil
+			default:
+				client.LogDebugf("Found too many words to complete")
+				return nil, nil
 			}
-			return &protocol.CompletionList{
-				Items: resourceCompletionList(pkg, parts[1]),
-			}, nil
-		default:
-			client.LogDebugf("Found too many words to complete")
-			return nil, nil
 		}
+		return nil, nil
 	}
 
-	if strings.HasPrefix(line, "Function:") {
-		client.LogWarningf("Function type completion not implemented yet")
+	if r, err := handleType("type:", resourceCompletionList); r != nil || err != nil {
+		return r, err
 	}
 
-	return nil, nil
+	return handleType("Function:", functionCompletionList)
 }
 
 // Return the list of currently loaded packages.
@@ -228,26 +231,52 @@ func moduleCompletionList(pkg *schema.Package) []protocol.CompletionItem {
 // prefixed by modHint are returned. If modHint is empty, then only resources in
 // the `index` namespace are returned.
 func resourceCompletionList(pkg *schema.Package, modHint string) []protocol.CompletionItem {
-	out := []protocol.CompletionItem{}
-	for _, r := range pkg.Resources {
-		mod := pkg.TokenToModule(r.Token)
-		parts := strings.Split(r.Token, ":")
-		name := parts[len(parts)-1]
-
-		// We want to use modHint as a prefix (a weak fuzzy filter), but only if
-		// modHint is "". When modHint is "", we interpret it as looking at the
-		// "index" module, so we need exact matches.
-		if (strings.HasPrefix(mod, modHint) && modHint != "") || mod == modHint {
-			out = append(out, protocol.CompletionItem{
-				Deprecated:       r.DeprecationMessage != "",
-				FilterText:       r.Token,
-				InsertText:       name,
-				InsertTextFormat: protocol.InsertTextFormatPlainText,
-				InsertTextMode:   protocol.InsertTextModeAsIs,
-				Kind:             protocol.CompletionItemKindClass,
-				Label:            name,
-			})
+	return buildCompletionList(protocol.CompletionItemKindClass, func(pkg *schema.Package) []util.Tuple[string, bool] {
+		out := make([]util.Tuple[string, bool], len(pkg.Resources))
+		for i, f := range pkg.Resources {
+			out[i].A = f.Token
+			out[i].B = f.DeprecationMessage != ""
 		}
+		return out
+	})(pkg, modHint)
+}
+
+func functionCompletionList(pkg *schema.Package, modHint string) []protocol.CompletionItem {
+	return buildCompletionList(protocol.CompletionItemKindFunction, func(pkg *schema.Package) []util.Tuple[string, bool] {
+		out := make([]util.Tuple[string, bool], len(pkg.Functions))
+		for i, f := range pkg.Functions {
+			out[i].A = f.Token
+			out[i].B = f.DeprecationMessage != ""
+		}
+		return out
+	})(pkg, modHint)
+}
+
+func buildCompletionList(kind protocol.CompletionItemKind, f func(pkg *schema.Package) []util.Tuple[string, bool]) func(pkg *schema.Package, modHint string) []protocol.CompletionItem {
+	return func(pkg *schema.Package, modHint string) []protocol.CompletionItem {
+		out := []protocol.CompletionItem{}
+		for _, r := range f(pkg) {
+			token := r.A
+			depreciated := r.B
+			mod := pkg.TokenToModule(token)
+			parts := strings.Split(token, ":")
+			name := parts[len(parts)-1]
+
+			// We want to use modHint as a prefix (a weak fuzzy filter), but only if
+			// modHint is "". When modHint is "", we interpret it as looking at the
+			// "index" module, so we need exact matches.
+			if (strings.HasPrefix(mod, modHint) && modHint != "") || mod == modHint {
+				out = append(out, protocol.CompletionItem{
+					Deprecated:       depreciated,
+					FilterText:       token,
+					InsertText:       name,
+					InsertTextFormat: protocol.InsertTextFormatPlainText,
+					InsertTextMode:   protocol.InsertTextModeAsIs,
+					Kind:             kind,
+					Label:            name,
+				})
+			}
+		}
+		return out
 	}
-	return out
 }

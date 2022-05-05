@@ -43,7 +43,7 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 				invoke.definition = f.Function
 				d.validateProperties(util.MapOver(invoke.defined.CallArgs.Entries, func(o ast.ObjectProperty) MapKey {
 					return MapKey{o.Key.(*ast.StringExpr).Value, o.Key.Syntax().Syntax().Range()}
-				}), f.Function.Inputs.Properties, f.Token,
+				}), f.Function.Inputs.Properties, f.Token, // BUG: Known to panic on this line when invalid functions are written
 					invoke.defined.CallArgs.Syntax().Syntax().Range())
 				if ret := invoke.defined.Return; ret != nil {
 					if out := f.Function.Outputs; out != nil {

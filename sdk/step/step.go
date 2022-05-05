@@ -69,7 +69,7 @@ func New[T any, F func() (T, bool)](ctx context.Context, f F) *Step[T] {
 }
 
 // Chain a step (if it succeeded) into another step.
-func Then[T any, U any, F func(T) (U, bool)](s *Step[T], f F) *Step[U] {
+func Then[T, U any, F func(T) (U, bool)](s *Step[T], f F) *Step[U] {
 	return New(s.ctx, func() (U, bool) {
 		var u U
 		t, ok := s.GetResult()

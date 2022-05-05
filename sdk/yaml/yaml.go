@@ -16,10 +16,9 @@ import (
 	"github.com/pulumi/pulumi-lsp/sdk/util"
 )
 
-// The holder of state between method calls.
+// The holder server level state.
 type server struct {
-	docs map[protocol.DocumentURI]*document
-
+	docs    map[protocol.DocumentURI]*document
 	schemas *SchemaCache
 }
 
@@ -119,7 +118,8 @@ func (s *server) hover(client lsp.Client, params *protocol.HoverParams) (*protoc
 		return nil, fmt.Errorf("Could not find an opened document %s", uri.Filename())
 	}
 	if doc.analysis == nil {
-		panic("Need to implement wait mechanism for docs")
+		// Do nothing. We can try again later.
+		return nil, nil
 	}
 	typ, err := doc.objectAtPoint(pos)
 	if err != nil {
