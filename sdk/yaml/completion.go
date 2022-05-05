@@ -13,7 +13,6 @@ import (
 
 	"github.com/pulumi/pulumi-lsp/sdk/lsp"
 	"github.com/pulumi/pulumi-lsp/sdk/util"
-	"github.com/pulumi/pulumi-lsp/sdk/yaml/bind"
 )
 
 // Tries to provide completion withing symbols and references.
@@ -29,25 +28,26 @@ func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) 
 	// We go through this song and dance to figure out if a property access list
 	// ends in a "."
 	plainReference := strings.TrimPrefix(refTxt, "${")
-	plainReference = strings.TrimSuffix(refTxt, "}")
+	plainReference = strings.TrimSuffix(plainReference, "}")
 	if len(accessors) == 0 && !strings.HasSuffix(plainReference, ".") {
 		// We are binding a ref at the top level. We iterate over all top level
 		// objects.
 		c.LogInfof("Completing %s as reference in the global namespace", refTxt)
 		list := []protocol.CompletionItem{}
 		for k, v := range b.A.Variables() {
-			kind := protocol.CompletionItemKindVariable
-			if _, ok := v.Source().(*bind.Resource); ok {
-				kind = protocol.CompletionItemKindClass
+			var typ schema.Type
+			if v != nil {
+				if s := v.Source(); s != nil {
+					typ = s.ResolveType(b.A)
+				}
 			}
-			list = append(list, protocol.CompletionItem{
-				CommitCharacters: []string{"."},
-				InsertTextFormat: protocol.InsertTextFormatPlainText,
-				InsertTextMode:   protocol.InsertTextModeAsIs,
-				Kind:             kind,
-				Label:            k,
-				Detail:           refTxt,
-			})
+			item := completionItemFromType(typ)
+			item.CommitCharacters = []string{"."}
+			item.InsertTextFormat = protocol.InsertTextFormatPlainText
+			item.InsertTextMode = protocol.InsertTextModeAsIs
+			item.Label = k
+
+			list = append(list, item)
 		}
 		return &protocol.CompletionList{Items: list}, nil
 	} else if v := ref.ref.Var(); v != nil {
