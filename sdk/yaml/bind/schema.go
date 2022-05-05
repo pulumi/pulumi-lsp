@@ -51,8 +51,7 @@ func (d *Decl) LoadSchema(loader schema.Loader) {
 				}
 				d.validateProperties(util.MapOver(args.Entries, func(o ast.ObjectProperty) MapKey {
 					return MapKey{o.Key.(*ast.StringExpr).Value, o.Key.Syntax().Syntax().Range()}
-				}), inputs, f.Token, // BUG: Known to panic on this line when invalid functions are written
-					args.Syntax().Syntax().Range())
+				}), inputs, f.Token, args.Syntax().Syntax().Range())
 				if ret := invoke.defined.Return; ret != nil {
 					if out := f.Function.Outputs; out != nil {
 						var valid bool
