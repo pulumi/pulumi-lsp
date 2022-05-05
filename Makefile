@@ -1,6 +1,4 @@
 GO        := go
-GOPRIVATE := github.com/pulumi/pulumi-yaml
-export GOPRIVATE
 
 CONCURRENCY ?= 10
 

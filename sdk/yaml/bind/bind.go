@@ -76,7 +76,11 @@ type Reference struct {
 }
 
 // Returns the property accessors that hang on the variable referenced.
-// If We have the symbol `${foo.bar}` then the function would return [bar].
+// Examples:
+//   ${foo.bar}     => ["bar"]
+//   ${foo.bar.baz} => ["bar" "baz"]
+//   ${foo.}        => []
+//   ${foo}         => []
 func (r *Reference) Accessors() PropertyAccessorList {
 	return r.access
 }
@@ -95,9 +99,10 @@ func (r *Reference) String() string {
 
 type PropertyAccessorList []PropertyAccessor
 
-// Compute out the type chain as long as possible.
-func (l PropertyAccessorList) Typed(root schema.Type) ([]schema.Type, *hcl.Diagnostic) {
-	types := make([]schema.Type, len(l))
+// Compute out the type chain as long as possible. The completion chain always
+// has 1 element since it includes the root.
+func (l PropertyAccessorList) TypeFromRoot(root schema.Type) ([]schema.Type, *hcl.Diagnostic) {
+	types := []schema.Type{root}
 	handleProperties := func(tag string, props []*schema.Property, parent schema.Type, rnge *hcl.Range) (*schema.Property, *hcl.Diagnostic) {
 		existing := map[string]struct{}{}
 		for _, p := range props {
@@ -121,12 +126,16 @@ func (l PropertyAccessorList) Typed(root schema.Type) ([]schema.Type, *hcl.Diagn
 		}
 		return ""
 	}
-	bail := func(diag *hcl.Diagnostic) ([]schema.Type, *hcl.Diagnostic) {
+	exit := func(diag *hcl.Diagnostic) ([]schema.Type, *hcl.Diagnostic) {
+		for len(types)+1 < len(l) {
+			// Indicate the a type exists but could not be found
+			types = append(types, nil)
+		}
 		return types, diag
 	}
-	for i, prop := range l {
+	for _, prop := range l {
 		next := func(t schema.Type) {
-			types[i] = t
+			types = append(types, t)
 			root = t
 		}
 		switch typ := codegen.UnwrapType(root).(type) {
@@ -137,9 +146,9 @@ func (l PropertyAccessorList) Typed(root schema.Type) ([]schema.Type, *hcl.Diagn
 					continue
 				}
 				// TODO: specialize for map index
-				return bail(noPropertyAccessDiag(typ.String(), prop.rnge))
+				return exit(noPropertyAccessDiag(typ.String(), prop.rnge))
 			}
-			return bail(noPropertyAccessDiag(typ.String(), prop.rnge))
+			return exit(noPropertyAccessDiag(typ.String(), prop.rnge))
 
 		case *schema.MapType:
 			switch a := prop.PropertyAccessor.(type) {
@@ -149,7 +158,7 @@ func (l PropertyAccessorList) Typed(root schema.Type) ([]schema.Type, *hcl.Diagn
 					next(typ.ElementType)
 					continue
 				}
-				return types, noPropertyIndexDiag(typ.String(), prop.rnge)
+				return exit(noPropertyIndexDiag(typ.String(), prop.rnge))
 			case *ast.PropertyName:
 				next(typ.ElementType)
 				continue
@@ -159,27 +168,30 @@ func (l PropertyAccessorList) Typed(root schema.Type) ([]schema.Type, *hcl.Diagn
 			r := typ.Resource
 			tag := getStringTag(prop.PropertyAccessor)
 			if tag == "" {
-				return bail(noPropertyIndexDiag(typ.String(), prop.rnge))
+				return exit(noPropertyIndexDiag(typ.String(), prop.rnge))
+			}
+			if r == nil {
+				return exit(nil)
 			}
 			prop, diag := handleProperties(tag, append(r.Properties, r.InputProperties...), typ, prop.rnge)
 			if diag != nil {
-				return bail(diag)
+				return exit(diag)
 			}
 			next(prop.Type)
 
 		case *schema.ObjectType:
 			tag := getStringTag(prop.PropertyAccessor)
 			if tag == "" {
-				return bail(noPropertyIndexDiag(typ.String(), prop.rnge))
+				return exit(noPropertyIndexDiag(typ.String(), prop.rnge))
 			}
 			prop, diag := handleProperties(tag, typ.Properties, typ, prop.rnge)
 			if diag != nil {
-				return bail(diag)
+				return exit(diag)
 			}
 			next(prop.Type)
 		}
 	}
-	return types, nil
+	return exit(nil)
 }
 
 type PropertyAccessor struct {
