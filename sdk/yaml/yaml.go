@@ -147,11 +147,13 @@ func (s *server) completion(client lsp.Client, params *protocol.CompletionParams
 	}
 
 	typeFuncCompletion, err := s.completeType(client, doc, params)
-	if err != nil {
-		return nil, err
+	if err != nil || typeFuncCompletion != nil {
+		return typeFuncCompletion, err
 	}
-	if typeFuncCompletion != nil {
-		return typeFuncCompletion, nil
+
+	keyCompletion, err := s.completeKey(client, doc, params)
+	if err != nil || keyCompletion != nil {
+		return keyCompletion, err
 	}
 
 	o, err := doc.objectAtPoint(params.Position)

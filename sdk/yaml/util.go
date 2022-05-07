@@ -117,3 +117,9 @@ func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.
 	}
 	return load, err
 }
+
+// ResolveResource resolves an arbitrary resource token into an appropriate schema.Resource.
+func (l SchemaCache) ResolveResource(c lsp.Client, token string) (*schema.Resource, error) {
+	// TODO: see ResolveResource doc comment
+	return nil, nil
+}

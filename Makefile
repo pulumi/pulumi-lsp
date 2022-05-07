@@ -2,6 +2,8 @@ GO        := go
 
 CONCURRENCY ?= 10
 
+default: build install
+
 build: vscode-client lsp-server
 
 lsp-server:

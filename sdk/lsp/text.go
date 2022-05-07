@@ -90,6 +90,8 @@ func (d *Document) Window(window protocol.Range) (string, error) {
 // Retrieve a specific line in the document. If the index is out of range (or
 // negative), an error is returned.
 func (d *Document) Line(i int) (string, error) {
+	d.m.Lock()
+	defer d.m.Unlock()
 	if i < 0 {
 		return "", fmt.Errorf("Cannot access negative line")
 	}
@@ -97,6 +99,12 @@ func (d *Document) Line(i int) (string, error) {
 		return "", fmt.Errorf("Line index is %d but there are only %d lines", i, len(d.lines))
 	}
 	return d.lines[i], nil
+}
+
+func (d *Document) LineLen() int {
+	d.m.Lock()
+	defer d.m.Unlock()
+	return len(d.lines)
 }
 
 // Validate that the range is in the Text. Calling validateRange requires

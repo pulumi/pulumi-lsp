@@ -355,3 +355,56 @@ func buildCompletionList(kind protocol.CompletionItemKind, f func(pkg *schema.Pa
 		return out
 	}
 }
+
+// completeKey returns the completion list for a key at `params.Position`.
+func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
+	parents, ok, err := parentKeys(doc.text, params.Position)
+	parents = util.ReverseList(parents)
+	if err != nil || !ok {
+		c.LogDebugf("Could not find enclosing (ok=%t) (err=%v)", ok, err)
+		return nil, err
+	}
+	// The properties key in a resource
+	if len(parents) == 3 &&
+		strings.ToLower(parents[0].B) == "properties" &&
+		strings.ToLower(parents[2].B) == "resources" {
+		sibs, ok, err := siblingKeys(doc.text, parents[0].A)
+		if !ok || err != nil {
+			return nil, err
+		}
+		typKey, ok := sibs["type"]
+		if !ok {
+			c.LogDebugf("Completing resource properties but could not find type")
+			return nil, nil
+		}
+		typ, err := doc.text.Line(int(typKey.Line))
+		if err != nil {
+			return nil, err
+		}
+		if els := strings.Split(typ, ":"); len(els) == 2 {
+			typ = strings.TrimSpace(els[1])
+		} else {
+			c.LogDebugf("Completing resource properties: found malformed type line: %q", typ)
+			return nil, nil
+		}
+		existingProperties, err := subsidiaryKeys(doc.text, parents[0].A)
+		if err != nil {
+			return nil, err
+		}
+		return s.completeProperties(c, typ, util.MapKeys(existingProperties))
+	}
+	return nil, nil
+}
+
+// completeProperties computes the set of properties that don't already exist
+// for the represented by `token`, then returns a completion list for those
+// remaining properties.
+func (s *server) completeProperties(c lsp.Client, token string, existing []string,
+) (*protocol.CompletionList, error) {
+	resource, err := s.schemas.ResolveResource(c, token)
+	if err != nil || resource == nil {
+		return nil, err
+	}
+	// TODO: see completeProperties doc comment
+	return nil, nil
+}

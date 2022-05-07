@@ -52,3 +52,12 @@ func MapValues[K comparable, V any](m map[K]V) []V {
 func DerefList[T any](l []*T) []T {
 	return MapOver(l, func(t *T) T { return *t })
 }
+
+// ReverseList reverses a list. It runs in O(n) time and O(n) space.
+func ReverseList[T any](l []T) []T {
+	rev := make([]T, 0, len(l))
+	for i := len(l) - 1; i >= 0; i-- {
+		rev = append(rev, l[i])
+	}
+	return rev
+}
