@@ -10,14 +10,18 @@ func ResourceProperties(resource *schema.Resource) []*schema.Property {
 	// id and urn props are special and not part of the schema
 	properties := []*schema.Property{
 		{
-			Name:  "id",
-			Type:  schema.StringType,
-			Plain: false,
+			Name:    "id",
+			Type:    schema.StringType,
+			Plain:   false,
+			Comment: "ID is a unique identifier assigned by a resource provider to a resource",
 		},
 		{
 			Name:  "urn",
 			Type:  schema.StringType,
 			Plain: false,
+			Comment: "URN is an automatically generated logical Uniform Resource Name, " +
+				"used to stably identify resources. See " +
+				"https://www.pulumi.com/docs/intro/concepts/resources/names/#urns",
 		},
 	}
 
