@@ -22,6 +22,7 @@ writing [Pulumi YAML](https://github.com/pulumi/pulumi-yaml).
 
 ### Completion
 
+- [x] When entering Pulumi YAML builtin keys.
 - [x] When entering input properties for a resource
 - [x] When entering a `type` field
 - [x] After typing `.` on a resource variable
