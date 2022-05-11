@@ -159,8 +159,8 @@ func indentationLevel(line string) (spaces int, allBlank bool) {
 	return level, strings.TrimSpace(line) == ""
 }
 
-// subsidiaryKeys returns a map of subsidiary keys to their positions.
-func subsidiaryKeys(text lsp.Document, pos protocol.Position) (map[string]protocol.Position, error) {
+// childKeys returns a map of subsidiary keys to their positions.
+func childKeys(text lsp.Document, pos protocol.Position) (map[string]protocol.Position, error) {
 	line, err := text.Line(int(pos.Line))
 	if err != nil {
 		return nil, err
@@ -213,9 +213,29 @@ func siblingKeys(text lsp.Document, pos protocol.Position) (map[string]protocol.
 	if err != nil || !ok {
 		return nil, ok, err
 	}
-	siblings, err := subsidiaryKeys(text, parent)
+	siblings, err := childKeys(text, parent)
 	if err != nil {
 		return nil, false, err
 	}
 	return siblings, true, nil
+}
+
+// topLevelKeys returns the top level YAML keys in `text`. The parse is line by line.
+func topLevelKeys(text lsp.Document) (map[string]protocol.Position, error) {
+	m := map[string]protocol.Position{}
+	for i := 0; i < text.LineLen(); i++ {
+		line, err := text.Line(i)
+		if err != nil {
+			return nil, err
+		}
+		if len(line) > 0 && line[0] != ' ' {
+			part := line
+			parts := strings.Split(line, ":")
+			if len(parts) > 0 {
+				part = parts[0]
+			}
+			m[part] = protocol.Position{Line: uint32(i), Character: 0}
+		}
+	}
+	return m, nil
 }

@@ -146,11 +146,13 @@ func (s *server) completion(client lsp.Client, params *protocol.CompletionParams
 		return nil, fmt.Errorf("Could not find an opened document %s", uri.Filename())
 	}
 
+	// Complete for `type: ...` or `Function: ...`.
 	typeFuncCompletion, err := s.completeType(client, doc, params)
 	if err != nil || typeFuncCompletion != nil {
 		return typeFuncCompletion, err
 	}
 
+	// Complete for new keys in the YAML
 	keyCompletion, err := s.completeKey(client, doc, params)
 	if err != nil || keyCompletion != nil {
 		return keyCompletion, err
@@ -166,5 +168,6 @@ func (s *server) completion(client lsp.Client, params *protocol.CompletionParams
 	if o, ok := o.(*Reference); ok {
 		return s.completeReference(client, doc, o)
 	}
+	client.LogWarningf("No handler responded to completion call")
 	return nil, nil
 }

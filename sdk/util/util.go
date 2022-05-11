@@ -2,6 +2,21 @@
 
 package util
 
+type Set[T comparable] map[T]struct{}
+
+func NewSet[T comparable](elements ...T) Set[T] {
+	s := make(map[T]struct{}, len(elements))
+	for _, e := range elements {
+		s[e] = struct{}{}
+	}
+	return s
+}
+
+func (s Set[T]) Has(element T) bool {
+	_, ok := s[element]
+	return ok
+}
+
 // Map f over arr.
 func MapOver[T any, U any, F func(T) U](arr []T, f F) []U {
 	l := make([]U, len(arr))
