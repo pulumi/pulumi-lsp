@@ -2,6 +2,21 @@
 
 package util
 
+type Set[T comparable] map[T]struct{}
+
+func NewSet[T comparable](elements ...T) Set[T] {
+	s := make(map[T]struct{}, len(elements))
+	for _, e := range elements {
+		s[e] = struct{}{}
+	}
+	return s
+}
+
+func (s Set[T]) Has(element T) bool {
+	_, ok := s[element]
+	return ok
+}
+
 // Map f over arr.
 func MapOver[T any, U any, F func(T) U](arr []T, f F) []U {
 	l := make([]U, len(arr))
@@ -51,4 +66,13 @@ func MapValues[K comparable, V any](m map[K]V) []V {
 // Dereference each element in a list.
 func DerefList[T any](l []*T) []T {
 	return MapOver(l, func(t *T) T { return *t })
+}
+
+// ReverseList reverses a list. It runs in O(n) time and O(n) space.
+func ReverseList[T any](l []T) []T {
+	rev := make([]T, 0, len(l))
+	for i := len(l) - 1; i >= 0; i-- {
+		rev = append(rev, l[i])
+	}
+	return rev
 }

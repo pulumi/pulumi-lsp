@@ -2,6 +2,8 @@ GO        := go
 
 CONCURRENCY ?= 10
 
+default: build install
+
 build: vscode-client lsp-server
 
 lsp-server:
@@ -20,7 +22,7 @@ clean:
 test:
 	go test ./...
 
-.phony: lint
+.phony: lint lint-copyright lint-golang
 lint:: lint-copyright lint-golang
 lint-golang:
 	golangci-lint -c .golangci.yml run

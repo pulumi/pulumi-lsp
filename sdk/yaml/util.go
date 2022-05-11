@@ -3,12 +3,15 @@
 package yaml
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/blang/semver"
 	"github.com/hashicorp/hcl/v2"
 	"go.lsp.dev/protocol"
 
+	yaml "github.com/pulumi/pulumi-yaml/pkg/pulumiyaml"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 
@@ -116,4 +119,32 @@ func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.
 		}
 	}
 	return load, err
+}
+
+// ResolveResource resolves an arbitrary resource token into an appropriate schema.Resource.
+func (l SchemaCache) ResolveResource(c lsp.Client, token string) (*schema.Resource, error) {
+	tokens := strings.Split(token, ":")
+	var pkg string
+	if len(tokens) < 2 {
+		return nil, fmt.Errorf("Invalid token '%s': too few spans", token)
+	}
+	pkg = tokens[0]
+	if strings.HasPrefix(token, "pulumi:providers:") {
+		pkg = tokens[2]
+	}
+	schema, err := l.Loader(c).LoadPackage(pkg, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Could not resolve resource: %w", err)
+	}
+	resolvedToken, err := yaml.NewResourcePackage(schema).ResolveResource(token)
+	if err != nil {
+		return nil, fmt.Errorf("Could not resolve resource: %w", err)
+	}
+	resolvedResource, ok := schema.GetResource(string(resolvedToken))
+	if !ok {
+		return nil, fmt.Errorf("Could not resolve resource: internal error: "+
+			"'%s' resolved to '%s' but the resolved token did not exist",
+			token, resolvedToken)
+	}
+	return resolvedResource, nil
 }
