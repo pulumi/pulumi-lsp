@@ -7,11 +7,15 @@ import (
 )
 
 func ResourceProperties(resource *schema.Resource) []*schema.Property {
+	// id and urn props are special and not part of the schema
 	properties := []*schema.Property{
-		// ID property is special and not part of the schema.
-		// TODO should this also do URN property?
 		{
 			Name:  "id",
+			Type:  schema.StringType,
+			Plain: false,
+		},
+		{
+			Name:  "urn",
 			Type:  schema.StringType,
 			Plain: false,
 		},
