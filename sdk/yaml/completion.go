@@ -78,12 +78,7 @@ func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) 
 func (s *server) typePropertyCompletion(t schema.Type, filterPrefix string) (*protocol.CompletionList, error) {
 	switch t := codegen.UnwrapType(t).(type) {
 	case *schema.ResourceType:
-		r := t.Resource
-		l := r.Properties
-		if r.InputProperties != nil {
-			l = append(l, r.InputProperties...)
-		}
-		return s.propertyListCompletion(l, filterPrefix)
+		return s.propertyListCompletion(util.ResourceProperties(t.Resource), filterPrefix)
 	case *schema.ObjectType:
 		return s.propertyListCompletion(t.Properties, filterPrefix)
 	default:
