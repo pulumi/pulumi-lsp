@@ -173,7 +173,8 @@ func (l PropertyAccessorList) TypeFromRoot(root schema.Type) ([]schema.Type, *hc
 			if r == nil {
 				return exit(nil)
 			}
-			prop, diag := handleProperties(tag, append(r.Properties, r.InputProperties...), typ, prop.rnge)
+
+			prop, diag := handleProperties(tag, util.ResourceProperties(r), typ, prop.rnge)
 			if diag != nil {
 				return exit(diag)
 			}
