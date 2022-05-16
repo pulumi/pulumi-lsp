@@ -8,11 +8,7 @@ on:
         default: ""
         required: false
         type: string
-    secrets:
-      PULUMI_ACCESS_TOKEN: { required: false }
-
 env:
-  PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   PULUMI_TEST_PARALLEL: false
 
