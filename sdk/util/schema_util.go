@@ -7,6 +7,9 @@ import (
 )
 
 func ResourceProperties(resource *schema.Resource) []*schema.Property {
+	if resource == nil {
+		return nil
+	}
 	// id and urn props are special and not part of the schema
 	properties := []*schema.Property{
 		{
