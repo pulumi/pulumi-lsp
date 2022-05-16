@@ -22,7 +22,7 @@ client/emacs/yaml-mode.el:
 	curl https://raw.githubusercontent.com/yoshiki/yaml-mode/master/yaml-mode.el > client/emacs/yaml-mode.el
 
 vscode-client:
-	cd client/vscode && npm install && npm run compile
+	cd client && npm install && npm run compile
 
 clean:
 	rm -r ./bin client/node_modules || true
