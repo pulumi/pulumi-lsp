@@ -1,23 +1,30 @@
 GO        := go
+EMACS     := emacs
+NODE      := node
 
 CONCURRENCY ?= 10
 
-default: build install
+default: install server
 
-build: vscode-client lsp-server
+build: server client
 
-lsp-server:
+server:
 	mkdir -p ./bin
 	${GO} build -o ./bin -p ${CONCURRENCY} ./cmd/...
-
-vscode-client:
-	cd client && npm install && npm run compile
 
 install: build
 	${GO} install ./cmd/...
 
+client: emacs-client vscode-client
+
+emacs-client: client/pulumi-yaml.elc
+
+vscode-client:
+	cd client && npm install && npm run compile
+
 clean:
-	rm -r ./bin client/node_modules
+	rm -r ./bin client/node_modules || true
+	rm client/*.elc || true
 
 test:
 	go test ./...
@@ -28,3 +35,6 @@ lint-golang:
 	golangci-lint -c .golangci.yml run
 lint-copyright:
 	pulumictl copyright
+
+%.elc: %.el
+	$(EMACS) -Q --batch -L . -f batch-byte-compile $<
