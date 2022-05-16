@@ -26,9 +26,9 @@ type Step[T any] struct {
 // failed.
 func (s *Step[T]) TryGetResult() (T, bool) {
 	select {
-	case _, _ = <-s.done:
+	case <-s.done:
 		return s.data, true
-	case _, _ = <-s.ctx.Done():
+	case <-s.ctx.Done():
 		return Zero[T](), false
 	default:
 		return Zero[T](), false

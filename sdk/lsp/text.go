@@ -162,15 +162,9 @@ func (d *Document) acceptChange(change protocol.TextDocumentContentChangeEvent) 
 		lines[0] = start
 		lines[len(lines)-1] += end
 		newLines := []string{}
-		for _, line := range d.lines[:s.Line] {
-			newLines = append(newLines, line)
-		}
-		for _, line := range lines {
-			newLines = append(newLines, line)
-		}
-		for _, line := range d.lines[e.Line+1:] {
-			newLines = append(newLines, line)
-		}
+		newLines = append(newLines, d.lines[:s.Line]...)
+		newLines = append(newLines, lines...)
+		newLines = append(newLines, d.lines[e.Line+1:]...)
 		d.lines = newLines
 		return nil
 	}
@@ -179,13 +173,9 @@ func (d *Document) acceptChange(change protocol.TextDocumentContentChangeEvent) 
 		// Joining lines together
 		join := d.lines[s.Line][:s.Character] + lines[0] + d.lines[e.Line][e.Character:]
 		newLines := []string{}
-		for _, line := range d.lines[:s.Line] {
-			newLines = append(newLines, line)
-		}
+		newLines = append(newLines, d.lines[:s.Line]...)
 		newLines = append(newLines, join)
-		for _, line := range d.lines[e.Line+1:] {
-			newLines = append(newLines, line)
-		}
+		newLines = append(newLines, d.lines[e.Line+1:]...)
 		d.lines = newLines
 		return nil
 	}

@@ -4,8 +4,6 @@
 
 ;;; Code:
 
-(require 'yaml-mode)
-
 (defvar pulumi-yaml-no-lsp nil
   "When t, pulumi-yaml will not load or associate a server to lsp.")
 
@@ -27,5 +25,6 @@
                     :add-on? t))
   (add-to-list 'lsp-language-id-configuration '(pulumi-yaml-mode . "pulumi-lsp")))
 
+(provide 'pulumi-yaml)
 
 ;;; pulumi-yaml ends here

@@ -84,7 +84,6 @@ func combineRange(lower, upper protocol.Range) protocol.Range {
 // A server level cache for schema loading.
 type SchemaCache struct {
 	inner schema.Loader
-	c     lsp.Client
 	m     *sync.Mutex
 	cache map[util.Tuple[string, string]]*schema.Package
 }
