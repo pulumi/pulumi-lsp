@@ -197,12 +197,14 @@ func childKeys(text lsp.Document, pos protocol.Position) (map[string]protocol.Po
 				Line:      uint32(i),
 				Character: uint32(indLevel),
 			}
-		} else if indLevel < level {
-			// Invalid yaml:
-			// foo:
-			//   bar: valid, level = 2
-			//  buz: invalid, level = 1
 		}
+		// indLevel < level implies invalid yaml:
+		// ```
+		// foo:
+		//   bar: valid, level = 2
+		//  buz: invalid, level = 1
+		// ```
+		// We do nothing
 	}
 	return m, nil
 }

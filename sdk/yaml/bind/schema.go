@@ -346,17 +346,6 @@ func NewDiagsFromLocation(f func(*hcl.Range) *hcl.Diagnostic) diagsFromLocation 
 	}
 }
 
-// Wraps a possibly nil diagsFromLocation in another diagnostic.
-func (d *diagsFromLocation) wrap(f func(*hcl.Range) *hcl.Diagnostic) diagsFromLocation {
-	return func(r *hcl.Range) hcl.Diagnostics {
-		var diags hcl.Diagnostics
-		if d != nil {
-			diags = append(diags, (*d)(r)...)
-		}
-		return append(diags, f(r))
-	}
-}
-
 // Maintain a cached map from tokens to specs.
 type pkgCache struct {
 	p         *schema.Package
