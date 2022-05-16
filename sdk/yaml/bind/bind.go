@@ -14,6 +14,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 
+	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml"
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
@@ -205,19 +206,30 @@ func (b *Decl) newRefernce(variable string, loc *hcl.Range, accessor []ast.Prope
 	v, ok := b.variables[variable]
 	// Name is used for the initial offset
 	var l []PropertyAccessor
-	// 2 for the ${
-	offsetByte := len(variable) + loc.Start.Byte + 1
-	offsetChar := len(variable) + loc.Start.Column + 1
+	offsetByte := len(variable) + loc.Start.Byte
+	offsetChar := len(variable) + loc.Start.Column
+	incrOffset := func(i int) {
+		offsetByte += i
+		offsetChar += i
+	}
+	// 2 for the leading ${
+	incrOffset(2)
 	for _, a := range accessor {
 		length := 0
+		postOffset := 0
 		switch a := a.(type) {
 		case *ast.PropertyName:
-			length = len(a.Name) + 1 // 1 for the .
+			incrOffset(1) // 1 for the .
+			length = len(a.Name)
 		case *ast.PropertySubscript:
 			switch a := a.Index.(type) {
 			case string:
-				length = len(a) + 4 // 2 quotes, 2 brackets
+				incrOffset(2)
+				postOffset = 2
+				length = len(a)
 			case int:
+				incrOffset(1)
+				postOffset = 1
 				length = len(fmt.Sprintf("%d", a)) + 2 // 2 brackets
 			}
 		}
@@ -237,8 +249,7 @@ func (b *Decl) newRefernce(variable string, loc *hcl.Range, accessor []ast.Prope
 					Byte:   offsetByte + length,
 				},
 			}
-			offsetByte += length
-			offsetChar += length
+			incrOffset(length + postOffset)
 		}
 		l = append(l, PropertyAccessor{
 			PropertyAccessor: a,
@@ -281,7 +292,15 @@ type VariableMapEntry struct{ ast.VariablesMapEntry }
 
 func (r *VariableMapEntry) isDefinition() {}
 func (v *VariableMapEntry) DefinitionRange() *hcl.Range {
-	return v.Key.Syntax().Syntax().Range()
+	s := v.Key.Syntax()
+	if s == nil {
+		return nil
+	}
+	ds := s.Syntax()
+	if ds == nil {
+		return nil
+	}
+	return ds.Range()
 }
 
 type ConfigMapEntry struct{ ast.ConfigMapEntry }
@@ -326,7 +345,22 @@ func (f *Invoke) Schema() *schema.Function {
 
 func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 	bound := &Decl{
-		variables:      map[string]*Variable{},
+		variables: map[string]*Variable{
+			pulumiyaml.PulumiVarName: {
+				definition: &VariableMapEntry{
+					ast.VariablesMapEntry{
+						Key: &ast.StringExpr{},
+						Value: ast.Object(
+							ast.ObjectProperty{Key: ast.String("cwd"), Value: ast.String("cwd")},
+							ast.ObjectProperty{Key: ast.String("stack"), Value: ast.String("stack")},
+							ast.ObjectProperty{Key: ast.String("project"), Value: ast.String("project")},
+						),
+					},
+				},
+				uses: nil,
+				name: pulumiyaml.PulumiVarName,
+			},
+		},
 		outputs:        map[string]ast.PropertyMapEntry{},
 		invokes:        map[*Invoke]struct{}{},
 		diags:          hcl.Diagnostics{},
@@ -414,9 +448,11 @@ func (b *Decl) analyzeBindings() error {
 				b.diags = append(b.diags, variableDoesNotExistDiag(name, use))
 			}
 		}
-		_, isResource := v.definition.(*Resource)
-		if len(v.uses) == 0 && !isResource {
-			b.diags = append(b.diags, unusedVariableDiag(name, v.definition.DefinitionRange()))
+		switch v.definition.(type) {
+		case *VariableMapEntry:
+			if len(v.uses) == 0 && name != pulumiyaml.PulumiVarName {
+				b.diags = append(b.diags, unusedVariableDiag(name, v.definition.DefinitionRange()))
+			}
 		}
 	}
 	return nil

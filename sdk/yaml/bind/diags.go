@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
+	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/diags"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 )
 
@@ -48,13 +49,16 @@ func variableDoesNotExistDiag(name string, use Reference) *hcl.Diagnostic {
 }
 
 func propertyDoesNotExistDiag(prop, parent string, suggestedProps []string, loc *hcl.Range) *hcl.Diagnostic {
-	var detail string
-	if len(suggestedProps) > 1 {
-		detail = fmt.Sprintf("Existing fields include %v", suggestedProps)
+	f := diags.NonExistantFieldFormatter{
+		ParentLabel:         parent,
+		Fields:              suggestedProps,
+		MaxElements:         0,
+		FieldsAreProperties: true,
 	}
+	msg, detail := f.MessageWithDetail(prop, fmt.Sprintf("Property '%s'", prop))
 	return &hcl.Diagnostic{
 		Severity: hcl.DiagError,
-		Summary:  fmt.Sprintf("Property '%s' does not exist on %s", prop, parent),
+		Summary:  msg,
 		Detail:   detail,
 		Subject:  loc,
 	}

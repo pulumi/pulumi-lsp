@@ -5,8 +5,6 @@ package step
 
 import (
 	"context"
-
-	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 )
 
 // Step represents a computation that may produce a value. This is equivalent to
@@ -38,7 +36,9 @@ func (s *Step[T]) TryGetResult() (T, bool) {
 // Block on retrieving the computed result. If the computation is canceled,
 // Zero[T](), false is returned.
 func (s *Step[T]) GetResult() (T, bool) {
-	contract.Assertf(s != nil, "Cannot get the result of a nil Step")
+	if s == nil {
+		return Zero[T](), false
+	}
 	select {
 	case <-s.done:
 		return s.data, true
