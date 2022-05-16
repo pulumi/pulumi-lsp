@@ -12,10 +12,10 @@ import (
 
 func TestPosInRange(t *testing.T) {
 	loc := &hcl.Range{
-		Start: hcl.Pos{Column: 17, Line: 3},
-		End:   hcl.Pos{Column: 26, Line: 17},
+		Start: hcl.Pos{Line: 3, Column: 17},
+		End:   hcl.Pos{Line: 17, Column: 26},
 	}
 
 	pos := protocol.Position{Line: 5, Character: 12}
-	assert.False(t, posInRange(loc, pos))
+	assert.True(t, posInRange(loc, pos))
 }
