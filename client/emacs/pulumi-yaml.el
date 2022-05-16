@@ -4,6 +4,8 @@
 
 ;;; Code:
 
+(require 'yaml-mode)
+
 (defvar pulumi-yaml-no-lsp nil
   "When t, pulumi-yaml will not load or associate a server to lsp.")
 
@@ -17,7 +19,12 @@
 
 
 (unless pulumi-yaml-no-lsp
-  (require 'lsp-mode)
+  (require 'lsp-mode) ;; Not evaluated at compile time
+  (eval-when-compile  ;; To fix compiler warnings
+    (declare-function lsp-register-client "lsp-mode")
+    (declare-function make-lsp-client "lsp-mode")
+    (declare-function lsp-stdio-connection "lsp-mode")
+    (defvar lsp-language-id-configuration))
   (lsp-register-client
    (make-lsp-client :new-connection (lsp-stdio-connection "pulumi-lsp")
                     :major-modes '(pulumi-yaml-mode)

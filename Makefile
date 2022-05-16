@@ -17,14 +17,18 @@ install: build
 
 client: emacs-client vscode-client
 
-emacs-client: client/pulumi-yaml.elc
+emacs-client: client/emacs/yaml-mode.el client/emacs/pulumi-yaml.elc
+client/emacs/yaml-mode.el:
+	curl https://raw.githubusercontent.com/yoshiki/yaml-mode/master/yaml-mode.el > client/emacs/yaml-mode.el
 
 vscode-client:
-	cd client && npm install && npm run compile
+	cd client/vscode && npm install && npm run compile
 
 clean:
 	rm -r ./bin client/node_modules || true
-	rm client/*.elc || true
+	# Cleaning up emacs
+	find . -name "*.elc" -exec rm {} \;
+	rm client/emacs/yaml-mode.el
 
 test:
 	go test ./...
@@ -37,4 +41,4 @@ lint-copyright:
 	pulumictl copyright
 
 %.elc: %.el
-	$(EMACS) -Q --batch -L . -f batch-byte-compile $<
+	cd client/emacs && $(EMACS) -Q --batch -L $$(pwd) -f batch-byte-compile $(notdir $<)
