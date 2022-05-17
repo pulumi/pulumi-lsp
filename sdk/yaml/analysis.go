@@ -5,6 +5,7 @@ package yaml
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -34,6 +35,18 @@ type documentAnalysisPipeline struct {
 	bound *step.Step[util.Tuple[*bind.Decl, *syntax.Diagnostic]]
 }
 
+func inferParseErrorLine(err string) (int, bool) {
+	e := strings.TrimPrefix(err, "yaml: ")
+	if l := strings.Split(e, ":"); len(l) > 1 {
+		e = l[0]
+	}
+	e = strings.TrimPrefix(e, "line ")
+	if line, err := strconv.ParseInt(e, 10, 64); err == nil {
+		return int(line), true
+	}
+	return 0, false
+}
+
 // Parse the document
 func (d *documentAnalysisPipeline) parse(text lsp.Document) {
 	// This is the first step of analysis, so we don't check for previous errors
@@ -43,6 +56,22 @@ func (d *documentAnalysisPipeline) parse(text lsp.Document) {
 			parseDiags = append(parseDiags, d.promoteError("Parse error", err))
 		} else if d.parsed == nil {
 			parseDiags = append(parseDiags, d.promoteError("Parse error", fmt.Errorf("No template returned")))
+		}
+
+		for _, d := range parseDiags {
+			if line, ok := inferParseErrorLine(d.Summary); ok {
+				d.Subject = &hcl.Range{
+					Filename: text.URI().Filename(),
+					Start: hcl.Pos{
+						Line:   line,
+						Column: 1,
+					},
+					End: hcl.Pos{
+						Line:   line,
+						Column: 0, // This indicates the end of the line
+					},
+				}
+			}
 		}
 		return util.Tuple[*ast.TemplateDecl, syntax.Diagnostics]{A: parsed, B: parseDiags}, true
 	})
