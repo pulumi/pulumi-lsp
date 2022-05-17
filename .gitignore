@@ -4,3 +4,4 @@
 *.elc
 yaml-mode.el
 sdk/yaml/testdata
+*.vsix

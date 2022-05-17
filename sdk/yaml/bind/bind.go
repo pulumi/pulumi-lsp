@@ -407,10 +407,18 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 	for _, r := range decl.Resources.Entries {
 		other, alreadyReferenced := bound.variables[r.Key.Value]
 		if alreadyReferenced {
+			var subject *hcl.Range
+			if s := r.Key.Syntax(); s != nil && s.Syntax() != nil {
+				subject = s.Syntax().Range()
+			}
+			var previous *hcl.Range
+			if other != nil && other.definition != nil {
+				previous = other.definition.DefinitionRange()
+			}
+			subject = r.Key.Syntax().Syntax().Range()
 			bound.diags = bound.diags.Append(
 				duplicateSourceDiag(r.Key.Value,
-					r.Key.Syntax().Syntax().Range(),
-					other.definition.DefinitionRange(),
+					subject, previous,
 				),
 			)
 		} else {

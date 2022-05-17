@@ -67,12 +67,15 @@ The server is theoretically deployable to any editor that supports LSP.
 ### VS Code
 
 Because [VS Code](https://code.visualstudio.com) is the most common editor, I
-used it for initial testing. So far, I launch the VS Code plugin by opening
-`client/src/extension.ts` in VS Code and hitting F5.
+used it for initial testing. Running `make install vscode-client` will install
+the server on your path and build a `.vsix` file. Running `code ${PATH_TO_VSIX}`
+will install the extension. See [the docs](https://vscode-docs.readthedocs.io/en/stable/extensions/install-extension/)
+for details.
 
 ### Emacs
 
 `pulumi-yaml.el` provides a major mode for editing Pulumi YAML which should be
 auto-invoked on relevant documents. It also associates a LSP server
 [emacs-lsp](https://emacs-lsp.github.io/lsp-mode/) which can be launched the
-usual way: `M-x lsp`.
+usual way: `M-x lsp`. Run `make install emacs-client` to install the server in
+`$GOPATH/bin`. A `pulumi-yaml.elc` fill will be generated in `client/emacs`.
