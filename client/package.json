@@ -1,27 +1,28 @@
 {
-  "name": "pulumi-lsp-client",
-  "description": "VSCode part of a language server",
-  "publisher": "pulumi",
-  "author": "iwahbe",
-  "license": "MIT",
-  "version": "0.0.1",
-  "engines": {
-    "vscode": "^1.63.0"
-  },
-  "dependencies": {
-    "vscode-languageclient": "^7.0.0"
-  },
-  "activationEvents": [
-    "workspaceContains:**/Pulumi.yaml",
-    "workspaceContains:**/Main.yaml"
-  ],
-  "main": "bin/extension",
-  "devDependencies": {
-    "@types/node": "^14.18.12",
-    "@types/vscode": "^1.63.0",
-    "typescript": "^4.6.2"
-  },
-  "scripts": {
-    "compile": "tsc -b"
-  }
+    "name": "pulumi-lsp-client",
+    "description": "VSCode part of a language server",
+    "repository": "https://github.com/pulumi/pulumi-lsp",
+    "publisher": "pulumi",
+    "author": "iwahbe",
+    "license": "MIT",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.63.0"
+    },
+    "dependencies": {
+        "vscode-languageclient": "^7.0.0"
+    },
+    "activationEvents": [
+        "workspaceContains:**/Pulumi.yaml",
+        "workspaceContains:**/Main.yaml"
+    ],
+    "main": "bin/extension",
+    "devDependencies": {
+        "@types/node": "^14.18.12",
+        "@types/vscode": "^1.63.0",
+        "typescript": "^4.6.2"
+    },
+    "scripts": {
+        "compile": "tsc -b"
+    }
 }
