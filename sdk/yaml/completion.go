@@ -516,39 +516,76 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 			c.LogDebugf("Completing resource properties but could not find type")
 			return nil, nil
 		}
-		typ, err := doc.text.Line(int(typKey.Line))
-		if err != nil {
-			return nil, err
-		}
-		if els := strings.SplitN(typ, ":", 2); len(els) == 2 {
-			typ = strings.TrimSpace(els[1])
-		} else {
-			c.LogDebugf("Completing resource properties: found malformed type line: %q", typ)
+
+		typ := getTokenAtLine(doc.text, int(typKey.Line))
+		if typ == "" {
+			c.LogDebugf("Completing resource properties: found malformed type on line: %q", typKey.Line)
 			return nil, nil
 		}
 		existingProperties, err := childKeys(doc.text, parents[0].A)
 		if err != nil {
 			return nil, err
 		}
-		return s.completeProperties(c, typ, util.MapKeys(existingProperties))
+		resource, err := s.schemas.ResolveResource(c, typ)
+		if err != nil || resource == nil {
+			return nil, err
+		}
+
+		return s.completeProperties(c, resource.InputProperties, util.MapKeys(existingProperties))
+
+		// The Arguments key in a function
+	case len(parents) > 3 &&
+		strings.ToLower(parents[0].B) == "arguments" &&
+		strings.ToLower(parents[1].B) == "fn::invoke":
+		keys, err := childKeys(doc.text, parents[1].A)
+		if err != nil {
+			return nil, err
+		}
+		fnKey, ok := keys["function"]
+		if !ok {
+			return nil, nil
+		}
+		typ := getTokenAtLine(doc.text, int(fnKey.Line))
+		if typ == "" {
+			return nil, nil
+		}
+		existingProperties, err := childKeys(doc.text, parents[0].A)
+		if err != nil {
+			return nil, err
+		}
+		fn, err := s.schemas.ResolveFunction(c, typ)
+		if err != nil || fn == nil || fn.Inputs == nil {
+			return nil, err
+		}
+
+		return s.completeProperties(c, fn.Inputs.Properties, util.MapKeys(existingProperties))
 
 	default:
 		return nil, nil
 	}
 }
 
+func getTokenAtLine(text lsp.Document, line int) string {
+	typ, err := text.Line(line)
+	if err != nil {
+		return ""
+	}
+	if els := strings.SplitN(typ, ":", 2); len(els) == 2 {
+		typ = strings.TrimSpace(els[1])
+	} else {
+		return ""
+	}
+	return typ
+}
+
 // completeProperties computes the set of properties that don't already exist
 // for the represented by `token`, then returns a completion list for those
 // remaining properties.
-func (s *server) completeProperties(c lsp.Client, token string, existing []string,
+func (s *server) completeProperties(c lsp.Client, inputs []*schema.Property, existing []string,
 ) (*protocol.CompletionList, error) {
-	resource, err := s.schemas.ResolveResource(c, token)
-	if err != nil || resource == nil {
-		return nil, err
-	}
-	props := make([]*schema.Property, len(resource.InputProperties))
+	props := make([]*schema.Property, len(inputs))
 	es := util.NewSet(util.MapOver(existing, strings.ToLower)...)
-	for _, p := range resource.InputProperties {
+	for _, p := range inputs {
 		if es.Has(strings.ToLower(p.Name)) {
 			continue
 		}

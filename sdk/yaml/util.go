@@ -147,3 +147,27 @@ func (l SchemaCache) ResolveResource(c lsp.Client, token string) (*schema.Resour
 	}
 	return resolvedResource, nil
 }
+
+// ResolveFunction resolves an arbitrary function token into an appropriate schema.Resource.
+func (l SchemaCache) ResolveFunction(c lsp.Client, token string) (*schema.Function, error) {
+	tokens := strings.Split(token, ":")
+	if len(tokens) < 2 {
+		return nil, fmt.Errorf("Invalid token '%s': too few spans", token)
+	}
+	pkg := tokens[0]
+	schema, err := l.Loader(c).LoadPackage(pkg, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Could not resolve function: %w", err)
+	}
+	resolvedToken, err := yaml.NewResourcePackage(schema).ResolveFunction(token)
+	if err != nil {
+		return nil, fmt.Errorf("Could not resolve function: %w", err)
+	}
+	resolvedFunction, ok := schema.GetFunction(string(resolvedToken))
+	if !ok {
+		return nil, fmt.Errorf("Could not resolve function: internal error: "+
+			"'%s' resolved to '%s' but the resolved token did not exist",
+			token, resolvedToken)
+	}
+	return resolvedFunction, nil
+}
