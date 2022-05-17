@@ -193,7 +193,7 @@ func childKeys(text lsp.Document, pos protocol.Position) (map[string]protocol.Po
 			if len(keyValue) == 0 {
 				continue
 			}
-			m[strings.TrimSpace(keyValue[0])] = protocol.Position{
+			m[strings.ToLower(strings.TrimSpace(keyValue[0]))] = protocol.Position{
 				Line:      uint32(i),
 				Character: uint32(indLevel),
 			}
