@@ -406,7 +406,7 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 	}
 	for _, r := range decl.Resources.Entries {
 		other, alreadyReferenced := bound.variables[r.Key.Value]
-		if alreadyReferenced {
+		if alreadyReferenced && other.definition != nil {
 			var subject *hcl.Range
 			if s := r.Key.Syntax(); s != nil && s.Syntax() != nil {
 				subject = s.Syntax().Range()
