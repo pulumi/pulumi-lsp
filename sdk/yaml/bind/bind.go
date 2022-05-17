@@ -415,7 +415,6 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 			if other != nil && other.definition != nil {
 				previous = other.definition.DefinitionRange()
 			}
-			subject = r.Key.Syntax().Syntax().Range()
 			bound.diags = bound.diags.Append(
 				duplicateSourceDiag(r.Key.Value,
 					subject, previous,
