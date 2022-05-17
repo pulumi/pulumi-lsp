@@ -279,6 +279,8 @@ func (d *Decl) checkSchemaPropertyAccess(def Definition, use Reference) {
 			return
 		}
 		d.verifyPropertyAccess(use.access, typ)
+	case nil:
+		return
 	default:
 		contract.Failf("Unknown definition type: %[1]T: %[1]v", def)
 	}
