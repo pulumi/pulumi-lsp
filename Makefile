@@ -12,7 +12,7 @@ server:
 	mkdir -p ./bin
 	${GO} build -o ./bin -p ${CONCURRENCY} ./cmd/...
 
-install: build
+install: server
 	${GO} install ./cmd/...
 
 client: emacs-client vscode-client
