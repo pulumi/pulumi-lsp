@@ -21,8 +21,10 @@ emacs-client: client/emacs/yaml-mode.el client/emacs/pulumi-yaml.elc
 client/emacs/yaml-mode.el:
 	curl https://raw.githubusercontent.com/yoshiki/yaml-mode/master/yaml-mode.el > client/emacs/yaml-mode.el
 
-vscode-client:
+vscode-build:
 	cd client && npm install && npm run compile
+vscode-client: vscode-build
+	cd client && npm exec vsce -- package
 
 clean:
 	rm -r ./bin client/node_modules || true
