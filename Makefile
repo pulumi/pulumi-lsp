@@ -18,20 +18,23 @@ install: server
 client: emacs-client vscode-client
 
 emacs-client: client/emacs/yaml-mode.el client/emacs/pulumi-yaml.elc
+	mkdir -p ./bin
+	mv client/emacs/pulumi-yaml.elc bin/
 client/emacs/yaml-mode.el:
 	curl https://raw.githubusercontent.com/yoshiki/yaml-mode/master/yaml-mode.el > client/emacs/yaml-mode.el
 
 vscode-build:
 	cd client && npm install && npm run compile
 vscode-client: vscode-build
-	cd client && npm exec vsce -- package
+	mkdir -p ./bin
+	cp LICENSE client/LICENSE
+	cd client && npm exec vsce -- package --out ../bin/
 
 clean:
 	rm -r ./bin client/node_modules || true
-	# Cleaning up emacs
-	find . -name "*.elc" -exec rm {} \;
 	rm client/emacs/yaml-mode.el || true
 	rm -r sdk/yaml/testdata || true
+	rm client/LICENSE || true
 
 test: get_schemas
 	go test ./...
