@@ -16,7 +16,7 @@ let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
   const serverOptions: ServerOptions = {
-    command: path.join(process.env["GOBIN"], "pulumi-lsp"),
+    command: "pulumi-lsp",
   };
 
   // Options to control the language client
