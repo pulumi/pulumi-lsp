@@ -13,9 +13,9 @@
   yaml-mode "Pulumi YAML"
   "A YAML derivative specifically for writing Pulumi programs in YAML.")
 
-(add-to-list 'auto-mode-alist '("Pulumi.yaml" . pulumi-yaml-mode))
-(add-to-list 'auto-mode-alist '("Pulumi.yml" . pulumi-yaml-mode))
-(add-to-list 'auto-mode-alist '("Main.yaml" . pulumi-yaml-mode))
+(add-to-list 'auto-mode-alist (cons
+                               (regexp-opt '("Pulumi.yaml" "Pulumi.yml" "Main.yaml"))
+                               'pulumi-yaml-mode))
 
 
 (unless pulumi-yaml-no-lsp
