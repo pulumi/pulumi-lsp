@@ -83,12 +83,12 @@ func combineRange(lower, upper protocol.Range) protocol.Range {
 
 // A server level cache for schema loading.
 type SchemaCache struct {
-	inner schema.Loader
+	inner schema.ReferenceLoader
 	m     *sync.Mutex
-	cache map[util.Tuple[string, string]]*schema.Package
+	cache map[util.Tuple[string, string]]schema.PackageReference
 }
 
-func (c *SchemaCache) Loader(client lsp.Client) schema.Loader {
+func (c *SchemaCache) Loader(client lsp.Client) schema.ReferenceLoader {
 	return SchemaLoader{c, client}
 }
 
@@ -97,7 +97,7 @@ type SchemaLoader struct {
 	c     lsp.Client
 }
 
-func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.Package, error) {
+func (l SchemaLoader) LoadPackageReference(pkg string, version *semver.Version) (schema.PackageReference, error) {
 	v := ""
 	if version != nil {
 		v = version.String()
@@ -108,7 +108,7 @@ func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.
 		func() {
 			l.cache.m.Lock()
 			defer l.cache.m.Unlock()
-			load, err = l.cache.inner.LoadPackage(pkg, version)
+			load, err = l.cache.inner.LoadPackageReference(pkg, version)
 		}()
 		if err == nil {
 			l.c.LogInfof("Successfully loaded pkg (%s,%s)", pkg, v)
@@ -118,6 +118,15 @@ func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.
 		}
 	}
 	return load, err
+
+}
+
+func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.Package, error) {
+	ref, err := l.LoadPackageReference(pkg, version)
+	if err != nil {
+		return nil, err
+	}
+	return ref.Definition()
 }
 
 // ResolveResource resolves an arbitrary resource token into an appropriate schema.Resource.
@@ -131,7 +140,7 @@ func (l SchemaCache) ResolveResource(c lsp.Client, token string) (*schema.Resour
 	if strings.HasPrefix(token, "pulumi:providers:") {
 		pkg = tokens[2]
 	}
-	schema, err := l.Loader(c).LoadPackage(pkg, nil)
+	schema, err := l.Loader(c).LoadPackageReference(pkg, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Could not resolve resource: %w", err)
 	}
@@ -139,7 +148,10 @@ func (l SchemaCache) ResolveResource(c lsp.Client, token string) (*schema.Resour
 	if err != nil {
 		return nil, fmt.Errorf("Could not resolve resource: %w", err)
 	}
-	resolvedResource, ok := schema.GetResource(string(resolvedToken))
+	resolvedResource, ok, err := schema.Resources().Get(string(resolvedToken))
+	if err != nil {
+		return nil, fmt.Errorf("Could not resolve resource: internal error: %w", err)
+	}
 	if !ok {
 		return nil, fmt.Errorf("Could not resolve resource: internal error: "+
 			"'%s' resolved to '%s' but the resolved token did not exist",
@@ -155,7 +167,7 @@ func (l SchemaCache) ResolveFunction(c lsp.Client, token string) (*schema.Functi
 		return nil, fmt.Errorf("Invalid token '%s': too few spans", token)
 	}
 	pkg := tokens[0]
-	schema, err := l.Loader(c).LoadPackage(pkg, nil)
+	schema, err := l.Loader(c).LoadPackageReference(pkg, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Could not resolve function: %w", err)
 	}
@@ -163,7 +175,10 @@ func (l SchemaCache) ResolveFunction(c lsp.Client, token string) (*schema.Functi
 	if err != nil {
 		return nil, fmt.Errorf("Could not resolve function: %w", err)
 	}
-	resolvedFunction, ok := schema.GetFunction(string(resolvedToken))
+	resolvedFunction, ok, err := schema.Functions().Get(string(resolvedToken))
+	if err != nil {
+		return nil, fmt.Errorf("Could not resolve function: internal error: %w", err)
+	}
 	if !ok {
 		return nil, fmt.Errorf("Could not resolve function: internal error: "+
 			"'%s' resolved to '%s' but the resolved token did not exist",

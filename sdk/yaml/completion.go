@@ -256,20 +256,21 @@ func (s *server) pkgCompletionList(pad bool) *protocol.CompletionList {
 	s.schemas.m.Lock()
 	defer s.schemas.m.Unlock()
 	return &protocol.CompletionList{
-		Items: util.MapOver(util.MapValues(s.schemas.cache), func(p *schema.Package) protocol.CompletionItem {
-			insert := p.Name + ":"
+		Items: util.MapOver(util.MapValues(s.schemas.cache), func(p schema.PackageReference) protocol.CompletionItem {
+			insert := p.Name() + ":"
 			if pad {
 				insert = " " + insert
 			}
 			return protocol.CompletionItem{
 				CommitCharacters: []string{":"},
-				Documentation:    p.Description,
-				FilterText:       p.Name,
+				// TODO: Add back after https://github.com/pulumi/pulumi/pull/9800 merges
+				// Documentation:    p.Description(),
+				FilterText:       p.Name(),
 				InsertText:       insert,
 				InsertTextFormat: protocol.InsertTextFormatPlainText,
 				InsertTextMode:   protocol.InsertTextModeAsIs,
 				Kind:             protocol.CompletionItemKindModule,
-				Label:            p.Name,
+				Label:            p.Name(),
 			}
 		}),
 	}

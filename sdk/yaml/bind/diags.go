@@ -98,16 +98,6 @@ func unparsableTokenDiag(tk string, loc *hcl.Range, err error) *hcl.Diagnostic {
 	}
 }
 
-func multipleResourcesDiag(tk string, loc *hcl.Range) *hcl.Diagnostic {
-	return &hcl.Diagnostic{
-		Severity: hcl.DiagWarning,
-		Summary:  fmt.Sprintf("More then one resource/alias points toward '%s'", tk),
-		Detail: "This indicates a problem with the backing schema, not your code." +
-			" Contact the package author with this message.",
-		Subject: loc,
-	}
-}
-
 func failedToLoadPackageDiag(pkg string, loc *hcl.Range, err error) *hcl.Diagnostic {
 	return &hcl.Diagnostic{
 		Severity:    hcl.DiagWarning,

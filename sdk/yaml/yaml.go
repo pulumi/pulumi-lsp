@@ -29,7 +29,7 @@ func Methods(host plugin.Host) *lsp.Methods {
 		schemas: &SchemaCache{
 			inner: schema.NewPluginLoader(host),
 			m:     &sync.Mutex{},
-			cache: map[util.Tuple[string, string]]*schema.Package{},
+			cache: map[util.Tuple[string, string]]schema.PackageReference{},
 		},
 	}
 	return lsp.Methods{

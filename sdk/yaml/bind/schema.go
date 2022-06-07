@@ -18,7 +18,7 @@ import (
 // Loads schemas as necessary from the loader to attach to resources and invokes.
 // The schemas are cached internally to make searching faster.
 // New diagnostics are appended to the internal diag list.
-func (d *Decl) LoadSchema(loader schema.Loader) {
+func (d *Decl) LoadSchema(loader schema.ReferenceLoader) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 	for invoke := range d.invokes {
@@ -298,7 +298,7 @@ func (d *Decl) verifyPropertyAccess(expr PropertyAccessorList, typ schema.Type) 
 
 // Load a package into the cache if necessary. errRange is the location that
 // motivated loading the package (a type token in a invoke or a resource).
-func (d *Decl) loadPackage(tk string, loader schema.Loader, errRange *hcl.Range) string {
+func (d *Decl) loadPackage(tk string, loader schema.ReferenceLoader, errRange *hcl.Range) string {
 	pkgName, err := pkgNameFromToken(tk)
 	if err != nil {
 		d.diags = append(d.diags, unparsableTokenDiag(tk, errRange, err))
@@ -307,7 +307,7 @@ func (d *Decl) loadPackage(tk string, loader schema.Loader, errRange *hcl.Range)
 
 	_, ok := d.loadedPackages[pkgName]
 	if !ok {
-		p, err := loader.LoadPackage(pkgName, nil)
+		p, err := loader.LoadPackageReference(pkgName, nil)
 		var pkg pkgCache
 		if err != nil {
 			pkg = pkgCache{
@@ -350,9 +350,7 @@ func NewDiagsFromLocation(f func(*hcl.Range) *hcl.Diagnostic) diagsFromLocation 
 
 // Maintain a cached map from tokens to specs.
 type pkgCache struct {
-	p         *schema.Package
-	resources map[string]ResourceSpec
-	invokes   map[string]FunctionSpec
+	p schema.PackageReference
 
 	// A package level warning, applied to every resource loaded with the
 	// package.
@@ -364,8 +362,17 @@ func (p *pkgCache) ResolveResource(token string) (ResourceSpec, bool) {
 	if err != nil {
 		return ResourceSpec{}, false
 	}
-	r, ok := p.resources[string(tk)]
-	return r, ok
+	r, ok, err := p.p.Resources().Get(tk.String())
+	if !ok || err != nil {
+		return ResourceSpec{}, false
+	}
+	spec := ResourceSpec{r, nil}
+	if r.DeprecationMessage != "" {
+		spec.diag = NewDiagsFromLocation(func(rng *hcl.Range) *hcl.Diagnostic {
+			return depreciatedDiag(r.Token, r.DeprecationMessage, rng)
+		})
+	}
+	return spec, ok
 }
 
 func (p *pkgCache) ResolveFunction(token string) (FunctionSpec, bool) {
@@ -373,15 +380,21 @@ func (p *pkgCache) ResolveFunction(token string) (FunctionSpec, bool) {
 	if err != nil {
 		return FunctionSpec{}, false
 	}
-	f, ok := p.invokes[string(tk)]
-	return f, ok
+	f, ok, err := p.p.Functions().Get(tk.String())
+	if !ok || err != nil {
+		return FunctionSpec{}, false
+	}
+	spec := FunctionSpec{}
+	if f.DeprecationMessage != "" {
+		spec.diag = NewDiagsFromLocation(func(rng *hcl.Range) *hcl.Diagnostic {
+			return depreciatedDiag(f.Token, f.DeprecationMessage, rng)
+		})
+
+	}
+	return spec, ok
 }
 
 func (p pkgCache) isValid() bool {
-	if p.p != nil {
-		contract.Assert(p.resources != nil)
-		contract.Assert(p.invokes != nil)
-	}
 	return p.p != nil
 }
 
@@ -397,44 +410,6 @@ type FunctionSpec struct {
 	diag diagsFromLocation
 }
 
-func newPkgCache(p *schema.Package) pkgCache {
-	resources := map[string]ResourceSpec{}
-	invokes := map[string]FunctionSpec{}
-	insertResource := func(k string, v *schema.Resource) {
-		f, alreadyUsed := resources[v.Token]
-		if alreadyUsed {
-			f.diag = NewDiagsFromLocation(func(r *hcl.Range) *hcl.Diagnostic {
-				return multipleResourcesDiag(v.Token, r)
-			})
-		} else {
-			r := ResourceSpec{v, nil}
-			if v.DeprecationMessage != "" {
-				r.diag = NewDiagsFromLocation(func(r *hcl.Range) *hcl.Diagnostic {
-					return depreciatedDiag(v.Token, v.DeprecationMessage, r)
-				})
-			}
-			resources[v.Token] = r
-		}
-
-	}
-	for _, invoke := range p.Functions {
-		_, ok := invokes[invoke.Token]
-		contract.Assertf(!ok, "Duplicate invokes found for token %s", invoke.Token)
-		spec := FunctionSpec{invoke, nil}
-		if invoke.DeprecationMessage != "" {
-			spec.diag = NewDiagsFromLocation(func(r *hcl.Range) *hcl.Diagnostic {
-				return depreciatedDiag(invoke.Token, invoke.DeprecationMessage, r)
-			})
-		}
-		invokes[invoke.Token] = spec
-	}
-	for _, r := range p.Resources {
-		insertResource(r.Token, r)
-		for _, alias := range r.Aliases {
-			if tk := alias.Type; tk != nil {
-				insertResource(*tk, r)
-			}
-		}
-	}
-	return pkgCache{p, resources, invokes, nil}
+func newPkgCache(p schema.PackageReference) pkgCache {
+	return pkgCache{p, nil}
 }
