@@ -10,6 +10,8 @@ import (
 	yaml "github.com/pulumi/pulumi-yaml/pkg/pulumiyaml"
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
+	"github.com/pulumi/pulumi/pkg/v3/resource/deploy/providers"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/tokens"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 
 	"github.com/pulumi/pulumi-lsp/sdk/util"
@@ -358,11 +360,19 @@ type pkgCache struct {
 }
 
 func (p *pkgCache) ResolveResource(token string) (ResourceSpec, bool) {
-	tk, err := yaml.NewResourcePackage(p.p).ResolveResource(token)
-	if err != nil {
-		return ResourceSpec{}, false
+	var r *schema.Resource
+	var err error
+	ok := true
+	if providers.IsProviderType(tokens.Type(token)) {
+		r, err = p.p.Provider()
+	} else {
+		var tk yaml.ResourceTypeToken
+		tk, err = yaml.NewResourcePackage(p.p).ResolveResource(token)
+		if err != nil {
+			return ResourceSpec{}, false
+		}
+		r, ok, err = p.p.Resources().Get(tk.String())
 	}
-	r, ok, err := p.p.Resources().Get(tk.String())
 	if !ok || err != nil {
 		return ResourceSpec{}, false
 	}
