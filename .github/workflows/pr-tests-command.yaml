@@ -2,7 +2,7 @@ name: Acceptance Tests (Command)
 
 on:
   repository_dispatch:
-    types: [ run-acceptance-tests-command ]
+    types: [run-acceptance-tests-command]
 
 jobs:
   comment-notification:
@@ -26,5 +26,4 @@ jobs:
   test:
     uses: pulumi/pulumi-lsp/.github/workflows/stage-test.yml@main
     with:
-      live-test: true
       commit-ref: refs/pull/${{ github.event.client_payload.pull_request.number }}/merge
