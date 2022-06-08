@@ -1,6 +1,7 @@
 GO        := go
 EMACS     := emacs
 NODE      := node
+SHELL     := bash
 
 CONCURRENCY ?= 10
 
@@ -31,10 +32,11 @@ vscode-client: vscode-build
 	cd client && npm exec vsce -- package --out ../bin/
 
 clean:
-	rm -r ./bin client/node_modules || true
-	rm client/emacs/yaml-mode.el || true
-	rm -r sdk/yaml/testdata || true
-	rm client/LICENSE || true
+	@rm -rf ./bin client/node_modules
+	@rm -f client/emacs/{yaml-mode.el,*.elc}
+	@rm -rf sdk/yaml/testdata
+	@rm -f client/LICENSE
+	@rm -f client/*.vsix
 
 test: get_schemas
 	go test ./...
