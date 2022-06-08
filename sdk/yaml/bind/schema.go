@@ -376,7 +376,7 @@ func (p *pkgCache) ResolveResource(token string) (ResourceSpec, bool) {
 	if !ok || err != nil {
 		return ResourceSpec{}, false
 	}
-	spec := ResourceSpec{r, nil}
+	spec := ResourceSpec{Resource: r}
 	if r.DeprecationMessage != "" {
 		spec.diag = NewDiagsFromLocation(func(rng *hcl.Range) *hcl.Diagnostic {
 			return depreciatedDiag(r.Token, r.DeprecationMessage, rng)
@@ -394,7 +394,7 @@ func (p *pkgCache) ResolveFunction(token string) (FunctionSpec, bool) {
 	if !ok || err != nil {
 		return FunctionSpec{}, false
 	}
-	spec := FunctionSpec{}
+	spec := FunctionSpec{Function: f}
 	if f.DeprecationMessage != "" {
 		spec.diag = NewDiagsFromLocation(func(rng *hcl.Range) *hcl.Diagnostic {
 			return depreciatedDiag(f.Token, f.DeprecationMessage, rng)
