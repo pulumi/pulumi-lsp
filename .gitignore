@@ -4,3 +4,7 @@
 yaml-mode.el
 sdk/yaml/testdata
 client/LICENSE
+
+# for goreleaser
+**/*.exe
+goreleaser
