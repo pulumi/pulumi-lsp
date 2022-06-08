@@ -9,12 +9,15 @@ default: install server
 
 build: server client
 
+VERSION      := $(shell pulumictl get version)
+LINK_VERSION := -ldflags "-X github.com/pulumi/pulumi-lsp/sdk/version.Version=${VERSION}"
+
 server:
 	mkdir -p ./bin
-	${GO} build -o ./bin -p ${CONCURRENCY} ./cmd/...
+	${GO} build ${LINK_VERSION} -o ./bin -p ${CONCURRENCY} ./cmd/...
 
 install: server
-	${GO} install ./cmd/...
+	${GO} install ${LINK_VERSION} ./cmd/...
 
 client: emacs-client vscode-client
 
