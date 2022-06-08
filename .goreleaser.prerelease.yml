@@ -1,0 +1,28 @@
+dist: goreleaser
+project_name: pulumi-lsp
+changelog:
+  skip: true
+release:
+  disable: true
+snapshot:
+  name_template: "{{ .Tag }}-SNAPSHOT"
+checksum:
+  name_template: "{{ .ProjectName }}-{{ .Version }}-checksums.txt"
+archives:
+  - id: archive
+    name_template: "{{ .Binary }}-{{ .Tag }}-{{ .Os }}-{{ .Arch }}"
+builds:
+  - id: pulumi-lsp
+    binary: pulumi-lsp
+    goarch:
+      - amd64
+      - arm64
+    goos:
+      - darwin
+      - windows
+      - linux
+    ldflags:
+      - -s
+      - -w
+      - -X github.com/pulumi/pulumi-lsp/sdk/version.Version={{.Tag}}
+    main: ./cmd/pulumi-lsp/
