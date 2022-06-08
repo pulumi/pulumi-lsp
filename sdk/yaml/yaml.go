@@ -14,6 +14,7 @@ import (
 
 	"github.com/pulumi/pulumi-lsp/sdk/lsp"
 	"github.com/pulumi/pulumi-lsp/sdk/util"
+	"github.com/pulumi/pulumi-lsp/sdk/version"
 )
 
 // The holder server level state.
@@ -38,7 +39,7 @@ func Methods(host plugin.Host) *lsp.Methods {
 		DidChangeFunc:  server.didChange,
 		HoverFunc:      server.hover,
 		CompletionFunc: server.completion,
-	}.DefaultInitializer("pulumi-lsp", "0.1.0")
+	}.DefaultInitializer("pulumi-lsp", version.Version)
 }
 
 func (s *server) setDocument(text lsp.Document) *document {
