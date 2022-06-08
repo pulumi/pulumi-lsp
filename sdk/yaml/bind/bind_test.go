@@ -164,7 +164,7 @@ var defaultPlugins []yaml.Plugin = []yaml.Plugin{
 	{Package: "kubernetes", Version: "3.0.0"},
 }
 
-func newPluginLoader() schema.Loader {
+func newPluginLoader() schema.ReferenceLoader {
 	schemaLoadPath := filepath.Join("..", "testdata")
 	host := func(pkg tokens.Package, version semver.Version) *deploytest.PluginLoader {
 		return deploytest.NewProviderLoader(pkg, version, func() (plugin.Provider, error) {
@@ -179,4 +179,4 @@ func newPluginLoader() schema.Loader {
 	return schema.NewPluginLoader(deploytest.NewPluginHost(nil, nil, nil, pluginLoaders...))
 }
 
-var rootPluginLoader schema.Loader = newPluginLoader()
+var rootPluginLoader schema.ReferenceLoader = newPluginLoader()

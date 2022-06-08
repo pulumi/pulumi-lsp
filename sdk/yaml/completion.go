@@ -204,7 +204,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 	}
 	line = strings.TrimSpace(line)
 
-	handleType := func(prefix string, resolve func(*schema.Package, string) []protocol.CompletionItem) (*protocol.CompletionList, error) {
+	handleType := func(prefix string, resolve func(schema.PackageReference, string) []protocol.CompletionItem) (*protocol.CompletionList, error) {
 		if strings.HasPrefix(line, prefix) {
 			currentWord := strings.TrimSpace(strings.TrimPrefix(line, prefix))
 			// Don't know that this is, just dump out
@@ -219,17 +219,54 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 				doPad := strings.TrimPrefix(line, prefix)
 				return s.pkgCompletionList(doPad == ""), nil
 			case 2:
-				pkg, err := s.schemas.Loader(client).LoadPackage(parts[0], nil)
+
+				// "pulumi" is a special package with a single module: "providers"
+				if parts[0] == "pulumi" {
+					return &protocol.CompletionList{
+						Items: []protocol.CompletionItem{{
+							CommitCharacters: []string{":"},
+							FilterText:       "pulumi:providers",
+							InsertText:       "providers:",
+							InsertTextFormat: protocol.InsertTextFormatPlainText,
+							InsertTextMode:   protocol.InsertTextModeAsIs,
+							Kind:             protocol.CompletionItemKindModule,
+							Label:            "providers",
+						}},
+					}, nil
+				}
+				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], nil)
 				if err != nil {
 					return nil, err
 				}
 				mods := moduleCompletionList(pkg)
-				client.LogDebugf("Found %d modules for %s", len(mods), pkg.Name)
+				client.LogDebugf("Found %d modules for %s", len(mods), pkg.Name())
 				return &protocol.CompletionList{
 					Items: append(mods, resolve(pkg, "")...),
 				}, nil
 			case 3:
-				pkg, err := s.schemas.Loader(client).LoadPackage(parts[0], nil)
+				if parts[0] == "pulumi" {
+					if parts[1] == "providers" {
+						s.schemas.m.Lock()
+						defer s.schemas.m.Unlock()
+						return &protocol.CompletionList{
+							IsIncomplete: false,
+							Items: util.MapOver(util.MapKeys(s.schemas.cache), func(t util.Tuple[string, string]) protocol.CompletionItem {
+								mod := t.A
+								return protocol.CompletionItem{
+									FilterText:       "pulumi:providers:" + mod,
+									InsertText:       mod,
+									InsertTextFormat: protocol.InsertTextFormatPlainText,
+									InsertTextMode:   protocol.InsertTextModeAsIs,
+									Kind:             protocol.CompletionItemKindModule,
+									Label:            mod,
+								}
+							}),
+						}, nil
+					}
+					// There are no valid completions for this token
+					return nil, nil
+				}
+				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], nil)
 				if err != nil {
 					return nil, err
 				}
@@ -255,39 +292,50 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 func (s *server) pkgCompletionList(pad bool) *protocol.CompletionList {
 	s.schemas.m.Lock()
 	defer s.schemas.m.Unlock()
+	insertText := func(name string) string {
+		name = name + ":"
+		if pad {
+			name = " " + name
+		}
+		return name
+	}
 	return &protocol.CompletionList{
-		Items: util.MapOver(util.MapValues(s.schemas.cache), func(p *schema.Package) protocol.CompletionItem {
-			insert := p.Name + ":"
-			if pad {
-				insert = " " + insert
-			}
+		Items: append(util.MapOver(util.MapValues(s.schemas.cache), func(p schema.PackageReference) protocol.CompletionItem {
 			return protocol.CompletionItem{
 				CommitCharacters: []string{":"},
-				Documentation:    p.Description,
-				FilterText:       p.Name,
-				InsertText:       insert,
+				// TODO: Add back after https://github.com/pulumi/pulumi/pull/9800 merges
+				// Documentation:    p.Description(),
+				FilterText:       p.Name(),
+				InsertText:       insertText(p.Name()),
 				InsertTextFormat: protocol.InsertTextFormatPlainText,
 				InsertTextMode:   protocol.InsertTextModeAsIs,
 				Kind:             protocol.CompletionItemKindModule,
-				Label:            p.Name,
+				Label:            p.Name(),
 			}
+		}), protocol.CompletionItem{
+			CommitCharacters: []string{":"},
+			FilterText:       "pulumi",
+			InsertText:       insertText("pulumi"),
+			InsertTextFormat: protocol.InsertTextFormatPlainText,
+			InsertTextMode:   protocol.InsertTextModeAsIs,
+			Kind:             protocol.CompletionItemKindModule,
+			Label:            "pulumi",
 		}),
 	}
 }
 
 // Return the completion list of modules for a given package.
-func moduleCompletionList(pkg *schema.Package) []protocol.CompletionItem {
-	m := map[string]bool{}
-	for _, r := range pkg.Resources {
-		s := pkg.TokenToModule(r.Token)
-		m[s] = m[s] || r.DeprecationMessage != ""
+func moduleCompletionList(pkg schema.PackageReference) []protocol.CompletionItem {
+	m := map[string]struct{}{}
+	for it := pkg.Resources().Range(); it.Next(); {
+		s := pkg.TokenToModule(it.Token())
+		m[s] = struct{}{}
 	}
 	out := make([]protocol.CompletionItem, 0, len(m))
-	for mod, depreciated := range m {
-		full := pkg.Name + ":" + mod
+	for mod := range m {
+		full := pkg.Name() + ":" + mod
 		out = append(out, protocol.CompletionItem{
 			CommitCharacters: []string{":"},
-			Deprecated:       depreciated,
 			FilterText:       full,
 			InsertText:       mod + ":",
 			InsertTextFormat: protocol.InsertTextFormatPlainText,
@@ -302,30 +350,43 @@ func moduleCompletionList(pkg *schema.Package) []protocol.CompletionItem {
 // The completion list of resources for a package. Only packages whose module is
 // prefixed by modHint are returned. If modHint is empty, then only resources in
 // the `index` namespace are returned.
-func resourceCompletionList(pkg *schema.Package, modHint string) []protocol.CompletionItem {
-	return buildCompletionList(protocol.CompletionItemKindClass, func(pkg *schema.Package) []util.Tuple[string, bool] {
-		out := make([]util.Tuple[string, bool], len(pkg.Resources))
-		for i, f := range pkg.Resources {
-			out[i].A = f.Token
-			out[i].B = f.DeprecationMessage != ""
+func resourceCompletionList(pkg schema.PackageReference, modHint string) []protocol.CompletionItem {
+	return buildCompletionList(protocol.CompletionItemKindClass, func(pkg schema.PackageReference) []util.Tuple[string, bool] {
+		out := []util.Tuple[string, bool]{}
+		for it := pkg.Resources().Range(); it.Next(); {
+			tup := util.Tuple[string, bool]{}
+			tup.A = it.Token()
+			f, err := it.Resource()
+			if err != nil {
+				tup.B = f.DeprecationMessage != ""
+			}
+			out = append(out, tup)
 		}
 		return out
 	})(pkg, modHint)
 }
 
-func functionCompletionList(pkg *schema.Package, modHint string) []protocol.CompletionItem {
-	return buildCompletionList(protocol.CompletionItemKindFunction, func(pkg *schema.Package) []util.Tuple[string, bool] {
-		out := make([]util.Tuple[string, bool], len(pkg.Functions))
-		for i, f := range pkg.Functions {
-			out[i].A = f.Token
-			out[i].B = f.DeprecationMessage != ""
+func functionCompletionList(pkg schema.PackageReference, modHint string) []protocol.CompletionItem {
+	return buildCompletionList(protocol.CompletionItemKindFunction, func(pkg schema.PackageReference) []util.Tuple[string, bool] {
+		out := []util.Tuple[string, bool]{}
+		for it := pkg.Functions().Range(); it.Next(); {
+			tup := util.Tuple[string, bool]{}
+			tup.A = it.Token()
+			f, err := it.Function()
+			if err != nil {
+				tup.B = f.DeprecationMessage != ""
+			}
+			out = append(out, tup)
 		}
+
 		return out
 	})(pkg, modHint)
 }
 
-func buildCompletionList(kind protocol.CompletionItemKind, f func(pkg *schema.Package) []util.Tuple[string, bool]) func(pkg *schema.Package, modHint string) []protocol.CompletionItem {
-	return func(pkg *schema.Package, modHint string) []protocol.CompletionItem {
+func buildCompletionList(
+	kind protocol.CompletionItemKind, f func(pkg schema.PackageReference) []util.Tuple[string, bool],
+) func(pkg schema.PackageReference, modHint string) []protocol.CompletionItem {
+	return func(pkg schema.PackageReference, modHint string) []protocol.CompletionItem {
 		out := []protocol.CompletionItem{}
 		for _, r := range f(pkg) {
 			token := r.A
