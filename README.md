@@ -3,6 +3,9 @@
 A [LSP server](https://microsoft.github.io/language-server-protocol/) for
 writing [Pulumi YAML](https://github.com/pulumi/pulumi-yaml).
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/pulumi/pulumi-lsp.svg)](https://pkg.go.dev/github.com/pulumi/pulumi-lsp)
+[![License](https://img.shields.io/github/license/pulumi/pulumi-lsp)](LICENSE)
+
 ---
 
 _Note_: The Pulumi YAML LSP Server is in a public beta. If you have suggestions
@@ -51,8 +54,8 @@ You should get semantic completion when:
 
 - [ ] When entering Pulumi YAML builtin keys.
   - [ ] Functions
-  - [ ] Top level
-  - [ ] Resources
+  - [x] Top level
+  - [x] Resources
 - [ ] On the return value for invokes
 
 ### Actions
