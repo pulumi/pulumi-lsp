@@ -12,6 +12,7 @@ archives:
   - id: archive
     name_template: "{{ .Binary }}-{{ .Os }}-{{ .Arch }}"
     format: gz
+    files: [none*]
 builds:
   - id: pulumi-lsp
     binary: pulumi-lsp
