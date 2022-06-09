@@ -7,10 +7,11 @@ release:
 snapshot:
   name_template: "{{ .Tag }}-SNAPSHOT"
 checksum:
-  name_template: "{{ .ProjectName }}-{{ .Version }}-checksums.txt"
+  name_template: "{{ .ProjectName }}-checksums.txt"
 archives:
   - id: archive
-    name_template: "{{ .Binary }}-{{ .Tag }}-{{ .Os }}-{{ .Arch }}"
+    name_template: "{{ .Binary }}-{{ .Os }}-{{ .Arch }}"
+    format: gz
 builds:
   - id: pulumi-lsp
     binary: pulumi-lsp
