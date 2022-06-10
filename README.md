@@ -79,6 +79,6 @@ for details.
 
 `pulumi-yaml.el` provides a major mode for editing Pulumi YAML which should be
 auto-invoked on relevant documents. It also associates a LSP server
-[emacs-lsp](https://emacs-lsp.github.io/lsp-mode/) which can be launched the
-usual way: `M-x lsp`. Run `make install emacs-client` to install the server in
-`$GOPATH/bin`. A `pulumi-yaml.elc` fill will be generated in `./bin`.
+[emacs-lsp](https://emacs-lsp.github.io/lsp-mode/) which can be launched the usual way:
+`M-x lsp`. Run `make install emacs-client` to install the server in `$GOPATH/bin`. A
+`pulumi-yaml.elc` fill will be generated in `./bin`.

@@ -21,11 +21,9 @@ install: server
 
 client: emacs-client vscode-client
 
-emacs-client: client/emacs/yaml-mode.el client/emacs/pulumi-yaml.elc
+emacs-client: client/emacs/pulumi-yaml.elc
 	mkdir -p ./bin
-	mv client/emacs/pulumi-yaml.elc bin/
-client/emacs/yaml-mode.el:
-	curl https://raw.githubusercontent.com/yoshiki/yaml-mode/master/yaml-mode.el > client/emacs/yaml-mode.el
+	cp client/emacs/pulumi-yaml.elc bin/
 
 vscode-build:
 	cd client && npm install && npm run compile
@@ -40,6 +38,7 @@ clean:
 	@rm -rf sdk/yaml/testdata
 	@rm -f client/LICENSE
 	@rm -f client/*.vsix
+	@rm -rf client/emacs/bin
 
 test: get_schemas
 	go test ./...
@@ -52,7 +51,12 @@ lint-copyright:
 	pulumictl copyright
 
 %.elc: %.el
-	cd client/emacs && $(EMACS) -Q --batch -L $$(pwd) -f batch-byte-compile $(notdir $<)
+	mkdir -p client/emacs/bin
+	cd client/emacs && $(EMACS) -Q --batch --eval "(progn (setq package-user-dir \"$$(pwd)/bin\" \
+                                                          package-archives '((\"melpa\" . \"https://melpa.org/packages/\") \
+                                                                           (\"gnu\" . \"https://elpa.gnu.org/packages/\"))) \
+												    (package-initialize) \
+                                                    (package-install 'yaml-mode) (package-install 'lsp-mode))" -f batch-byte-compile $(notdir $<)
 
 SCHEMA_PATH := sdk/yaml/testdata
 name=$(subst schema-,,$(word 1,$(subst !, ,$@)))
