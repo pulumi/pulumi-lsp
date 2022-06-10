@@ -8,3 +8,6 @@ client/LICENSE
 # for goreleaser
 **/*.exe
 goreleaser
+
+# For emacs
+*.elc
