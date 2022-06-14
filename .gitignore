@@ -1,5 +1,6 @@
 **/node_modules
 **/bin
+**/out
 .DS_Store
 yaml-mode.el
 sdk/yaml/testdata

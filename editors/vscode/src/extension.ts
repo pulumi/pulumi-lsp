@@ -38,11 +38,12 @@ export async function activate(
   context: ExtensionContext,
 ): Promise<PulumiLSPClient> {
   const serverPath = await getServer(context);
+  console.log(`Found server path: ${serverPath}`);
   if (serverPath === undefined) {
     return Promise.reject();
   }
   const serverOptions: ServerOptions = {
-    command: path.join(),
+    command: serverPath,
   };
 
   // Create the language client and start the client.

@@ -26,7 +26,7 @@ emacs-client: editors/emacs/pulumi-yaml.elc
 	cp editors/emacs/pulumi-yaml.elc bin/
 
 vscode-build:
-	cd editors/vscode && npm install && npm run compile
+	cd editors/vscode && npm install && npm run esbuild
 vscode-client: vscode-build
 	mkdir -p ./bin
 	cp LICENSE editors/vscode/LICENSE
