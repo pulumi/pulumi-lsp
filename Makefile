@@ -26,10 +26,13 @@ emacs-client: editors/emacs/pulumi-yaml.elc
 	cp editors/emacs/pulumi-yaml.elc bin/
 
 vscode-build:
-	cd editors/vscode && npm install && npm run esbuild
-vscode-client: vscode-build
+	cd editors/vscode && npm install && npm run test-compile && npm run esbuild
+
+# Because vscode bundles embed the LSP server, we need to build the server first.
+vscode-client: vscode-build server
 	mkdir -p ./bin
 	cp LICENSE editors/vscode/LICENSE
+	cp bin/pulumi-lsp editors/vscode/
 	cd editors/vscode && npm exec vsce -- package --out ../../bin/
 
 clean:
@@ -38,6 +41,7 @@ clean:
 	@rm -rf sdk/yaml/testdata
 	@rm -f editors/vscode/LICENSE
 	@rm -f editors/vscode/*.vsix
+	@rm -f editors/vscode/pulumi-lsp
 	@rm -rf editors/emacs/bin
 
 test: get_schemas

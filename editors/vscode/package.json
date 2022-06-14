@@ -28,5 +28,17 @@
         "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/main.js --external:vscode --format=cjs --platform=node",
         "esbuild": "npm run esbuild-base -- --sourcemap",
         "test-compile": "tsc -p ./"
+    },
+    "contributes": {
+        "configuration": {
+            "title": "Pulumi LSP",
+            "properties": {
+                "pulumi-lsp.server.path": {
+                    "type": ["string", "null"],
+                    "default": null,
+                    "markdownDescription": "Specifies the path to the `pulumi-lsp` binary to use. Leave as `null` to use the binary bundled with the downloaded extension."
+                }
+            }
+        }
     }
 }

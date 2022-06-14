@@ -4,7 +4,10 @@
 .DS_Store
 yaml-mode.el
 sdk/yaml/testdata
+
+# Files copied for building the VS Code extension
 editors/vscode/LICENSE
+editors/vscode/pulumi-lsp
 
 # for goreleaser
 **/*.exe
