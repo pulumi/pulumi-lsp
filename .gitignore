@@ -3,7 +3,7 @@
 .DS_Store
 yaml-mode.el
 sdk/yaml/testdata
-client/LICENSE
+editors/vscode/LICENSE
 
 # for goreleaser
 **/*.exe
