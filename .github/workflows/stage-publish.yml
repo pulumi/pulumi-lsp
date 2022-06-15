@@ -67,6 +67,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - name: Install pulumictl
+        uses: jaxxstorm/action-install-gh-release@v1.7.1
+        with:
+          repo: pulumi/pulumictl
+          tag: v0.0.31
+          cache: enable
       - uses: actions/setup-node@v2
         with:
           node-version: 18.x
@@ -75,6 +81,9 @@ jobs:
         with:
           name: lsp-binaries
           if-no-files-found: error
+      - name: npm install
+        run: |
+          cd editors/vscode && npm install
       - name: build
         run: |
           mkdir bin
