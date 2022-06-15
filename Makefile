@@ -30,7 +30,13 @@ vscode-build:
 
 # Because vscode bundles embed the LSP server, we need to build the server first.
 vscode-client: vscode-build server
-	mkdir -p ./bin
+	cp LICENSE editors/vscode/LICENSE
+	cp bin/pulumi-lsp editors/vscode/
+	cd editors/vscode && npm exec vsce -- package --out ../../bin/
+
+# This mirrors vscode-client without the dependencies. You are expected to manually
+# control the dependencies.
+vscode-publish:
 	cp LICENSE editors/vscode/LICENSE
 	cp bin/pulumi-lsp editors/vscode/
 	cd editors/vscode && npm exec vsce -- package --out ../../bin/
