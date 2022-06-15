@@ -33,7 +33,7 @@ jobs:
         with:
           name: lsp-binaries
           if-no-files-found: error
-          path: dist/*
+          path: goreleaser/pulumi-lsp_*
   vscode:
     name: Publish VS Code Extension
     needs: [publish]
