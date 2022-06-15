@@ -29,7 +29,7 @@ jobs:
           args: ${{ inputs.goreleaser-args }}
           version: latest
       - name: Upload assets as artifacts
-        uses: actions/upload-artifacts@v3
+        uses: actions/upload-artifact@v3
         with:
           name: lsp-binaries
           if-no-files-found: error
