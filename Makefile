@@ -38,7 +38,7 @@ vscode-client: vscode-build server
 # control the dependencies.
 vscode-publish:
 	cp LICENSE editors/vscode/LICENSE
-	cp bin/pulumi-lsp editors/vscode/
+	cp bin/pulumi-lsp* editors/vscode/ # Handle .exe for windows
 	cd editors/vscode && npm exec vsce -- package --out ../../bin/
 
 clean:
