@@ -81,7 +81,8 @@ jobs:
       - name: build
         run: |
           mkdir bin
-          gzip -d ${{steps.download.outputs.download-path}}/pulumi-lsp-${{matrix.platform}}-${{matrix.arch}}.gz bin
+          ls ${{steps.download.outputs.download-path}}
+          mv ${{steps.download.outputs.download-path}}/pulumi-lsp-${{matrix.platform}}-${{matrix.arch}}* bin/
           make vscode-publish
       - name: publish
         run: |
