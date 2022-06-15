@@ -81,8 +81,11 @@ jobs:
       - name: build
         run: |
           mkdir bin
+          echo "Download dir"
           ls ${{steps.download.outputs.download-path}}
-          mv ${{steps.download.outputs.download-path}}/pulumi-lsp-${{matrix.platform}}-${{matrix.arch}}* bin/
+          echo "Inside download dir"
+          ls ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.platform}}_${{matrix.arch}}*
+          mv ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.platform}}_${{matrix.arch}}*/* bin/
           make vscode-publish
       - name: publish
         run: |
