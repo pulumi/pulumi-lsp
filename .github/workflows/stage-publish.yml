@@ -28,3 +28,61 @@ jobs:
         with:
           args: ${{ inputs.goreleaser-args }}
           version: latest
+      - name: Upload assets as artifacts
+        uses: actions/upload-artifacts@v3
+        with:
+          name: lsp-binaries
+          if-no-files-found: error
+          path: dist/*
+  vscode:
+    name: Publish VS Code Extension
+    needs: [publish]
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32
+            arch: x64
+          - os: windows-latest
+            platform: win32
+            arch: ia32
+          - os: windows-latest
+            platform: win32
+            arch: arm64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm64
+          - os: ubuntu-latest
+            platform: linux
+            arch: armhf
+          - os: ubuntu-latest
+            platform: alpine
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: 18.x
+      - uses: actions/download-artifact@v2
+        id: download
+        with:
+          name: lsp-binaries
+          if-no-files-found: error
+      - name: build
+        run: |
+          mkdir bin
+          gzip -d ${{steps.download.outputs.download-path}}/pulumi-lsp-${{matrix.platform}}-${{matrix.arch}}.gz bin
+          make vscode-publish
+      - name: publish
+        run: |
+          npm exec vsce -- publish --packagePath bin/*.vsix

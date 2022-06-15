@@ -21,24 +21,34 @@ install: server
 
 client: emacs-client vscode-client
 
-emacs-client: client/emacs/pulumi-yaml.elc
+emacs-client: editors/emacs/pulumi-yaml.elc
 	mkdir -p ./bin
-	cp client/emacs/pulumi-yaml.elc bin/
+	cp editors/emacs/pulumi-yaml.elc bin/
 
 vscode-build:
-	cd client && npm install && npm run compile
-vscode-client: vscode-build
-	mkdir -p ./bin
-	cp LICENSE client/LICENSE
-	cd client && npm exec vsce -- package --out ../bin/
+	cd editors/vscode && npm install && npm run test-compile && npm run esbuild
+
+# Because vscode bundles embed the LSP server, we need to build the server first.
+vscode-client: vscode-build server
+	cp LICENSE editors/vscode/LICENSE
+	cp bin/pulumi-lsp editors/vscode/
+	cd editors/vscode && npm exec vsce -- package --out ../../bin/
+
+# This mirrors vscode-client without the dependencies. You are expected to manually
+# control the dependencies.
+vscode-publish:
+	cp LICENSE editors/vscode/LICENSE
+	cp bin/pulumi-lsp editors/vscode/
+	cd editors/vscode && npm exec vsce -- package --out ../../bin/
 
 clean:
-	@rm -rf ./bin client/node_modules
-	@rm -f client/emacs/{yaml-mode.el,*.elc}
+	@rm -rf ./bin editors/node_modules
+	@rm -f editors/emacs/{yaml-mode.el,*.elc}
 	@rm -rf sdk/yaml/testdata
-	@rm -f client/LICENSE
-	@rm -f client/*.vsix
-	@rm -rf client/emacs/bin
+	@rm -f editors/vscode/LICENSE
+	@rm -f editors/vscode/*.vsix
+	@rm -f editors/vscode/pulumi-lsp
+	@rm -rf editors/emacs/bin
 
 test: get_schemas
 	go test ./...
@@ -51,8 +61,8 @@ lint-copyright:
 	pulumictl copyright
 
 %.elc: %.el
-	mkdir -p client/emacs/bin
-	cd client/emacs && $(EMACS) -Q --batch --eval "(progn (setq package-user-dir \"$$(pwd)/bin\" \
+	mkdir -p editors/emacs/bin
+	cd editors/emacs && $(EMACS) -Q --batch --eval "(progn (setq package-user-dir \"$$(pwd)/bin\" \
                                                           package-archives '((\"melpa\" . \"https://melpa.org/packages/\") \
                                                                            (\"gnu\" . \"https://elpa.gnu.org/packages/\"))) \
 												    (package-initialize) \
