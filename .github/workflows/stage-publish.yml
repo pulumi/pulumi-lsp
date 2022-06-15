@@ -40,33 +40,30 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: windows-latest
-            platform: win32
+          - platform: win32
             arch: x64
-          - os: windows-latest
-            platform: win32
-            arch: ia32
-          - os: windows-latest
-            platform: win32
+            file: windows_amd64_v1
+          - platform: win32
             arch: arm64
-          - os: ubuntu-latest
-            platform: linux
+            file: windows_arm64
+          - platform: linux
             arch: x64
-          - os: ubuntu-latest
-            platform: linux
+            file: linux_amd64_v1
+          - platform: linux
             arch: arm64
-          - os: ubuntu-latest
-            platform: linux
+            file: linux_arm64
+          - platform: linux
             arch: armhf
-          - os: ubuntu-latest
-            platform: alpine
+            file: linux_arm64
+          - platform: alpine
             arch: x64
-          - os: macos-latest
-            platform: darwin
+            file: linux_arm64
+          - platform: darwin
             arch: x64
-          - os: macos-latest
-            platform: darwin
+            file: darwin_amd64_v1
+          - platform: darwin
             arch: arm64
+            file: darwin_arm64
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -84,8 +81,8 @@ jobs:
           echo "Download dir"
           ls ${{steps.download.outputs.download-path}}
           echo "Inside download dir"
-          ls ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.platform}}_${{matrix.arch}}*
-          mv ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.platform}}_${{matrix.arch}}*/* bin/
+          ls ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}
+          mv ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/* bin/
           make vscode-publish
       - name: publish
         run: |
