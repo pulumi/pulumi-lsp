@@ -34,13 +34,6 @@ vscode-client: vscode-build server
 	cp bin/pulumi-lsp editors/vscode/
 	cd editors/vscode && npm exec vsce -- package --out ../../bin/
 
-# This mirrors vscode-client without the dependencies. You are expected to manually
-# control the dependencies.
-vscode-publish:
-	cp LICENSE editors/vscode/LICENSE
-	cp bin/pulumi-lsp* editors/vscode/ # Handle .exe for windows
-	cd editors/vscode && npm exec vsce -- package --out ../../bin/
-
 clean:
 	@rm -rf ./bin editors/node_modules
 	@rm -f editors/emacs/{yaml-mode.el,*.elc}

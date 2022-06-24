@@ -6,6 +6,14 @@ on:
       goreleaser-args:
         required: true
         type: string
+      vsce-pre-release:
+        required: false
+        type: boolean
+        default: false
+      vsce-full-release:
+        required: false
+        type: boolean
+        default: false
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,19 +88,29 @@ jobs:
         id: download
         with:
           name: lsp-binaries
-          if-no-files-found: error
       - name: npm install
         run: |
           cd editors/vscode && npm install
-      - name: build
+      - name: Prepare to Package
         run: |
           mkdir bin
-          echo "Download dir"
-          ls ${{steps.download.outputs.download-path}}
-          echo "Inside download dir"
-          ls ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}
-          mv ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/* bin/
-          make vscode-publish
-      - name: publish
+          cp LICENSE editors/vscode/LICENSE
+          mv ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/* editors/vscode/
+      - name: Package (Prereleas)
+        if: inputs.vsce-pre-release
         run: |
-          npm exec vsce -- publish --packagePath bin/*.vsix
+          cd editors/vscode
+          npm exec vsce -- package --pre-release --target "${{ matrix.platform }}-${{ matrix.arch }}" --out ../../bin/
+      # - name: Publish (Pre-Release)
+      #   if: inputs.vsce-pre-release
+      #   run: |
+      #     npm exec vsce -- publish --pre-release --pat ${{ secrets.microsoft_pat }} --packagePath bin/*.vsix
+      - name: Package (Release)
+        if: inputs.vsce-full-release
+        run: |
+          cd editors/vscode
+          npm exec vsce -- package --target "${{ matrix.platform }}-${{ matrix.arch }}" --out ../../bin/
+      # - name: Publish (Release)
+      #   if: inputs.vsce-full-release
+      #   run: |
+      #     npm exec vsce -- publish --pat ${{ secrets.microsoft_pat }} --packagePath bin/*.vsix
