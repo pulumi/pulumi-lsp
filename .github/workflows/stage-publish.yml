@@ -101,16 +101,16 @@ jobs:
         run: |
           cd editors/vscode
           npm exec vsce -- package --pre-release --target "${{ matrix.platform }}-${{ matrix.arch }}" --out ../../bin/
-      - name: Publish (Pre-Release)
-        if: inputs.vsce-pre-release
-        run: |
-          npm exec vsce -- publish --pre-release --pat ${{ secrets.microsoft_pat }} --packagePath bin/*.vsix
+      # - name: Publish (Pre-Release)
+      #   if: inputs.vsce-pre-release
+      #   run: |
+      #     npm exec vsce -- publish --pre-release --pat ${{ secrets.microsoft_pat }} --packagePath bin/*.vsix
       - name: Package (Release)
         if: inputs.vsce-full-release
         run: |
           cd editors/vscode
           npm exec vsce -- package --target "${{ matrix.platform }}-${{ matrix.arch }}" --out ../../bin/
-      - name: Publish (Release)
-        if: inputs.vsce-full-release
-        run: |
-          npm exec vsce -- publish --pat ${{ secrets.microsoft_pat }} --packagePath bin/*.vsix
+      # - name: Publish (Release)
+      #   if: inputs.vsce-full-release
+      #   run: |
+      #     npm exec vsce -- publish --pat ${{ secrets.microsoft_pat }} --packagePath bin/*.vsix
