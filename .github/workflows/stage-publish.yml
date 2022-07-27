@@ -17,6 +17,7 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
 jobs:
   publish:
