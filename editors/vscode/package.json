@@ -1,11 +1,21 @@
 {
     "name": "pulumi-lsp-client",
-    "description": "VSCode part of a language server",
-    "repository": "https://github.com/pulumi/pulumi-lsp",
+    "displayName": "Pulumi YAML",
+    "description": "IntelliSense and Linting for Pulumi YAML in VSCode",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/pulumi/pulumi-lsp"
+    },
+    "homepage": "https://github.com/pulumi/pulumi-lsp/blob/main/README.md",
     "publisher": "pulumi",
     "author": "iwahbe",
     "license": "MIT",
     "version": "0.0.1",
+    "categories": [
+      "Programming Languages",
+      "Snippets",
+      "Linters"
+    ],
     "engines": {
         "vscode": "^1.63.0"
     },

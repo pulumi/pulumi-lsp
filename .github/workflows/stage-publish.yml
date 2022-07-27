@@ -17,6 +17,7 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
 jobs:
   publish:
@@ -95,22 +96,23 @@ jobs:
         run: |
           mkdir bin
           cp LICENSE editors/vscode/LICENSE
+          cp README.md editors/vscode/README.md
           mv ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/* editors/vscode/
       - name: Package (Prereleas)
         if: inputs.vsce-pre-release
         run: |
           cd editors/vscode
           npm exec vsce -- package --pre-release --target "${{ matrix.platform }}-${{ matrix.arch }}" --out ../../bin/
-      # - name: Publish (Pre-Release)
-      #   if: inputs.vsce-pre-release
-      #   run: |
-      #     npm exec vsce -- publish --pre-release --pat ${{ secrets.microsoft_pat }} --packagePath bin/*.vsix
+      - name: Publish (Pre-Release)
+        if: inputs.vsce-pre-release
+        run: |
+          npm exec vsce -- publish --pre-release --packagePath bin/*.vsix
       - name: Package (Release)
         if: inputs.vsce-full-release
         run: |
           cd editors/vscode
           npm exec vsce -- package --target "${{ matrix.platform }}-${{ matrix.arch }}" --out ../../bin/
-      # - name: Publish (Release)
-      #   if: inputs.vsce-full-release
-      #   run: |
-      #     npm exec vsce -- publish --pat ${{ secrets.microsoft_pat }} --packagePath bin/*.vsix
+      - name: Publish (Release)
+        if: inputs.vsce-full-release
+        run: |
+          npm exec vsce -- publish --packagePath bin/*.vsix
