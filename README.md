@@ -3,7 +3,6 @@
 A [LSP server](https://microsoft.github.io/language-server-protocol/) for
 writing [Pulumi YAML](https://github.com/pulumi/pulumi-yaml).
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/pulumi/pulumi-lsp.svg)](https://pkg.go.dev/github.com/pulumi/pulumi-lsp)
 [![License](https://img.shields.io/github/license/pulumi/pulumi-lsp)](LICENSE)
 
 ---

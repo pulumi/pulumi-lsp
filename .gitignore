@@ -7,6 +7,7 @@ sdk/yaml/testdata
 
 # Files copied for building the VS Code extension
 editors/vscode/LICENSE
+editors/vscode/README.md
 editors/vscode/pulumi-lsp
 
 # for goreleaser
