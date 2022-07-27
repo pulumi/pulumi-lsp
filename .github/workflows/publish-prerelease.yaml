@@ -7,7 +7,6 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
 jobs:
   lint:
@@ -17,6 +16,7 @@ jobs:
   publish:
     needs: [test, lint]
     uses: ./.github/workflows/stage-publish.yml
+    secrets: inherit
     with:
       goreleaser-args: -p 10 -f .goreleaser.prerelease.yml --rm-dist --skip-validate --timeout 60m0s --release-notes=CHANGELOG_PENDING.md
       vsce-pre-release: true
