@@ -9,7 +9,8 @@ default: install server
 
 build: server client
 
-VERSION      := $(shell git describe --tags --candidates=0 --dirty=$$(git rev-parse --short HEAD))
+COMMIT       := $(shell git rev-parse --short HEAD)
+VERSION      := $(shell git describe --tags --candidates=0 --dirty=${COMMIT})
 LINK_VERSION := -ldflags "-X github.com/pulumi/pulumi-lsp/sdk/version.Version=${VERSION}"
 
 server:
