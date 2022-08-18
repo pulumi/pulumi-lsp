@@ -590,7 +590,19 @@ func completeResourceKeys(doc *document, keyPos protocol.Position) (*protocol.Co
 			Detail:     detail,
 		})
 	}
-
+	isProvider := func(s string) bool {
+		s = strings.TrimSpace(s)
+		parts := strings.Split(s, ":")
+		if len(parts) != 3 {
+			return false
+		}
+		return parts[0] == "pulumi" && parts[1] == "providers"
+	}
+	// If we don't have a type, it could be a provider, so suggest.
+	// If we do have a type, suggest only if it is a provider
+	if typ, ok := existing["type"]; !ok || isProvider(typ) {
+		addItem("defaultProvider", "If this provider should be the default for its package", false)
+	}
 	addItem("properties", "A map of resource properties."+
 		" See https://www.pulumi.com/docs/intro/concepts/resources/ for details.", true)
 	addItem("type", "The Pulumi type token for this resource.", false)
