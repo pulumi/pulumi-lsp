@@ -99,7 +99,7 @@ func defaultPluginHost() (plugin.Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	return plugin.NewDefaultHost(context, nil, nil, false)
+	return plugin.NewDefaultHost(context, nil, false, nil)
 }
 
 // An io.ReadWriteCloser, whose value indicates if the closer is closed.
