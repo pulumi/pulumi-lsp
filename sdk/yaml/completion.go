@@ -591,15 +591,11 @@ func completeResourceKeys(doc *document, keyPos protocol.Position, postFix postF
 	}
 
 	items := []protocol.CompletionItem{}
-	existing := map[string]string{}
-	for _, s := range util.MapKeys(sibs) {
+	existing := map[string]protocol.Position{}
+	for s, p := range sibs {
 		s = strings.ToLower(s)
 		s = strings.TrimSpace(s)
-		parts := strings.Split(s, ":")
-		if len(parts) > 0 {
-			s = parts[0]
-		}
-		existing[s] = strings.Join(parts[1:], ":")
+		existing[s] = p
 	}
 
 	addItem := func(label, detail string, post func(int) string) {
@@ -613,9 +609,9 @@ func completeResourceKeys(doc *document, keyPos protocol.Position, postFix postF
 			InsertTextMode: protocol.InsertTextModeAsIs,
 		})
 	}
-	isProvider := func(s string) bool {
-		s = strings.TrimSpace(s)
-		parts := strings.Split(s, ":")
+	isProvider := func(pos protocol.Position) bool {
+		typ := getTokenAtLine(doc.text, int(pos.Line))
+		parts := strings.Split(typ, ":")
 		if len(parts) != 3 {
 			return false
 		}
@@ -623,7 +619,7 @@ func completeResourceKeys(doc *document, keyPos protocol.Position, postFix postF
 	}
 	// If we don't have a type, it could be a provider, so suggest.
 	// If we do have a type, suggest only if it is a provider
-	if typ, ok := existing["type"]; !ok || isProvider(typ) {
+	if p, ok := existing["type"]; !ok || isProvider(p) {
 		addItem("defaultProvider", "If this provider should be the default for its package", postFix.sameLine)
 	}
 	addItem("properties", "A map of resource properties."+
@@ -692,6 +688,10 @@ func completeFunctionArgumentKeys(
 	return s.completeProperties(c, fn.Inputs.Properties, util.MapKeys(existingProperties), postFix, indentLevel)
 }
 
+// Fetch the token on a line such as
+// type: ${TOKEN}
+//
+// If an unexpected value is found, "" is returned.
 func getTokenAtLine(text lsp.Document, line int) string {
 	typ, err := text.Line(line)
 	if err != nil {
