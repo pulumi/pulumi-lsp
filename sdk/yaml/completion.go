@@ -90,20 +90,18 @@ func (s *server) typePropertyCompletion(t schema.Type, filterPrefix string) (*pr
 func (s *server) propertyListCompletion(l []*schema.Property, filterPrefix string) (*protocol.CompletionList, error) {
 	items := make([]protocol.CompletionItem, 0, len(l))
 	for _, prop := range l {
-		if prop != nil {
-			// Derive item from type
-			item := completionItemFromType(prop.Type)
-			// then set property level defaults
-			item.CommitCharacters = []string{".", "["}
-			item.Deprecated = prop.DeprecationMessage != ""
-			item.FilterText = filterPrefix + prop.Name
-			item.InsertText = prop.Name
-			item.InsertTextFormat = protocol.InsertTextFormatPlainText
-			item.InsertTextMode = protocol.InsertTextModeAsIs
-			item.Label = prop.Name
+		// Derive item from type
+		item := completionItemFromType(prop.Type)
+		// then set property level defaults
+		item.CommitCharacters = []string{".", "["}
+		item.Deprecated = prop.DeprecationMessage != ""
+		item.FilterText = filterPrefix + prop.Name
+		item.InsertText = prop.Name
+		item.InsertTextFormat = protocol.InsertTextFormatPlainText
+		item.InsertTextMode = protocol.InsertTextModeAsIs
+		item.Label = prop.Name
 
-			items = append(items, item)
-		}
+		items = append(items, item)
 	}
 	return &protocol.CompletionList{Items: items}, nil
 }
@@ -435,12 +433,13 @@ func uniqueCompletions(existing []string,
 
 // completeKey returns the completion list for a key at `params.Position`.
 func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
-	parents, ok, err := parentKeys(doc.text, params.Position)
+	parents, indentation, ok, err := parentKeys(doc.text, params.Position)
 	parents = util.ReverseList(parents)
 	if err != nil {
 		c.LogDebugf("Could not find enclosing (ok=%t) (err=%v)", ok, err)
 		return nil, err
 	}
+	postFix := postFix{indentation}
 	switch {
 	case !ok: // We are at the top level
 		return completeTopLevelKeys(doc)
@@ -449,23 +448,23 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 	case len(parents) == 3 &&
 		strings.ToLower(parents[0].B) == "options" &&
 		strings.ToLower(parents[2].B) == "resources":
-		return completeResourceOptionsKeys(doc, parents[0].A)
+		return completeResourceOptionsKeys(doc, parents[0].A, postFix)
 
 	// Completing for the Resource decl
 	case len(parents) == 2 && strings.ToLower(parents[1].B) == "resources":
-		return completeResourceKeys(doc, parents[0].A)
+		return completeResourceKeys(doc, parents[0].A, postFix)
 
 	// The properties key in a resource
 	case len(parents) == 3 &&
 		strings.ToLower(parents[0].B) == "properties" &&
 		strings.ToLower(parents[2].B) == "resources":
-		return completeResourcePropertyKeys(c, doc, parents[0].A, s)
+		return completeResourcePropertyKeys(c, doc, parents[0].A, s, postFix)
 
 	// The Arguments key in a function
 	case len(parents) > 3 &&
 		strings.ToLower(parents[0].B) == "arguments" &&
 		strings.ToLower(parents[1].B) == "fn::invoke":
-		return completeFunctionArgumentKeys(c, doc, parents[1].A, parents[0].A, s)
+		return completeFunctionArgumentKeys(c, doc, parents[1].A, parents[0].A, s, postFix, len(parents))
 
 	default:
 		return nil, nil
@@ -502,17 +501,22 @@ func completeTopLevelKeys(doc *document) (*protocol.CompletionList, error) {
 	}, nil
 }
 
-func completeResourceOptionsKeys(doc *document, keyPos protocol.Position) (*protocol.CompletionList, error) {
+func completeResourceOptionsKeys(doc *document, keyPos protocol.Position, post postFix) (*protocol.CompletionList, error) {
 	sibs, err := childKeys(doc.text, keyPos)
 	if err != nil {
 		return nil, err
 	}
-	setDetails := func(detail, doc string) func(*protocol.CompletionItem) {
+	setDetails := func(detail, doc string, post func(int) string) func(*protocol.CompletionItem) {
 		return func(c *protocol.CompletionItem) {
 			c.Detail = detail
-			// NOTE: This assumes that 2 spaces are used for indentation
-			c.InsertText = c.Label + ": "
+			// We are indenting to the forth level
+			// resources:
+			//   name:
+			//     options:
+			//       what we are suggestion
+			c.InsertText = c.Label + post(4)
 			c.Documentation = doc
+			c.InsertTextMode = protocol.InsertTextModeAsIs
 		}
 	}
 
@@ -526,37 +530,61 @@ func completeResourceOptionsKeys(doc *document, keyPos protocol.Position) (*prot
 			}
 			return s
 		}), []util.Tuple[string, func(*protocol.CompletionItem)]{
-			{A: "additionalSecretOutputs", B: setDetails("List<String>",
-				"AdditionalSecretOutputs specifies properties that must be encrypted as secrets")},
-			{A: "aliases", B: setDetails("List<String>",
-				"Aliases specifies names that this resource used to be have so that renaming or refactoring doesn’t replace it")},
-			{A: "customTimeouts", B: setDetails("CustomTimeout",
-				"CustomTimeouts overrides the default retry/timeout behavior for resource provisioning")},
-			{A: "deleteBeforeReplace", B: setDetails("Boolean",
-				"DeleteBeforeReplace overrides the default create-before-delete behavior when replacing")},
-			{A: "dependsOn", B: setDetails("List<Expression>",
-				"DependsOn makes this resource explicitly depend on another resource, by name, so that it won't be created before the "+
-					"dependent finishes being created (and the reverse for destruction). Normally, Pulumi automatically tracks implicit"+
-					" dependencies through inputs/outputs, but this can be used when dependencies aren't captured purely from input/output edges.")},
-			{A: "ignoreChanges", B: setDetails("List<String>",
-				"IgnoreChanges declares that changes to certain properties should be ignored during diffing")},
-			{A: "import", B: setDetails("String",
-				"Import adopts an existing resource from your cloud account under the control of Pulumi")},
-			{A: "parent", B: setDetails("Resource",
-				"Parent specifies a parent for the resource")},
-			{A: "protect", B: setDetails("Boolean",
-				"Protect prevents accidental deletion of a resource")},
-			{A: "provider", B: setDetails("Provider Resource",
-				"Provider specifies an explicitly configured provider, instead of using the default global provider")},
-			{A: "providers", B: setDetails("Map<Provider Resource>",
-				"Map of providers for a resource and its children.")},
-			{A: "version", B: setDetails("String",
-				"Version specifies a provider plugin version that should be used when operating on a resource")},
+			{A: "additionalSecretOutputs",
+				B: setDetails("List<String>",
+					"AdditionalSecretOutputs specifies properties that must be encrypted as secrets",
+					post.intoList)},
+			{A: "aliases",
+				B: setDetails("List<String>",
+					"Aliases specifies names that this resource used to be have so that renaming or refactoring doesn’t replace it",
+					post.intoList)},
+			{A: "customTimeouts",
+				B: setDetails("CustomTimeout",
+					"CustomTimeouts overrides the default retry/timeout behavior for resource provisioning",
+					post.intoObject)},
+			{A: "deleteBeforeReplace",
+				B: setDetails("Boolean",
+					"DeleteBeforeReplace overrides the default create-before-delete behavior when replacing",
+					post.sameLine)},
+			{A: "dependsOn",
+				B: setDetails("List<Expression>",
+					"DependsOn makes this resource explicitly depend on another resource, by name, so that it won't be created before the "+
+						"dependent finishes being created (and the reverse for destruction). Normally, Pulumi automatically tracks implicit"+
+						" dependencies through inputs/outputs, but this can be used when dependencies aren't captured purely from input/output edges.",
+					post.intoList)},
+			{A: "ignoreChanges",
+				B: setDetails("List<String>",
+					"IgnoreChanges declares that changes to certain properties should be ignored during diffing",
+					post.intoList)},
+			{A: "import",
+				B: setDetails("String",
+					"Import adopts an existing resource from your cloud account under the control of Pulumi",
+					post.sameLine)},
+			{A: "parent",
+				B: setDetails("Resource",
+					"Parent specifies a parent for the resource",
+					post.sameLine)},
+			{A: "protect",
+				B: setDetails("Boolean",
+					"Protect prevents accidental deletion of a resource",
+					post.sameLine)},
+			{A: "provider",
+				B: setDetails("Provider Resource",
+					"Provider specifies an explicitly configured provider, instead of using the default global provider",
+					post.sameLine)},
+			{A: "providers",
+				B: setDetails("Map<Provider Resource>",
+					"Map of providers for a resource and its children.",
+					post.intoObject)},
+			{A: "version",
+				B: setDetails("String",
+					"Version specifies a provider plugin version that should be used when operating on a resource",
+					post.sameLine)},
 		}),
 	}, nil
 }
 
-func completeResourceKeys(doc *document, keyPos protocol.Position) (*protocol.CompletionList, error) {
+func completeResourceKeys(doc *document, keyPos protocol.Position, postFix postFix) (*protocol.CompletionList, error) {
 	sibs, err := childKeys(doc.text, keyPos)
 	if err != nil {
 		return nil, err
@@ -574,20 +602,15 @@ func completeResourceKeys(doc *document, keyPos protocol.Position) (*protocol.Co
 		existing[s] = strings.Join(parts[1:], ":")
 	}
 
-	addItem := func(label, detail string, object bool) {
+	addItem := func(label, detail string, post func(int) string) {
 		if _, ok := existing[label]; ok {
 			return
 		}
-		// Consider using this as an opportunity to do auto indentation do
-		// \n(\t...):
-		insertText := label
-		if object {
-			insertText += ":\n"
-		}
 		items = append(items, protocol.CompletionItem{
-			InsertText: insertText,
-			Label:      label,
-			Detail:     detail,
+			InsertText:     label + post(3),
+			Label:          label,
+			Detail:         detail,
+			InsertTextMode: protocol.InsertTextModeAsIs,
 		})
 	}
 	isProvider := func(s string) bool {
@@ -601,18 +624,20 @@ func completeResourceKeys(doc *document, keyPos protocol.Position) (*protocol.Co
 	// If we don't have a type, it could be a provider, so suggest.
 	// If we do have a type, suggest only if it is a provider
 	if typ, ok := existing["type"]; !ok || isProvider(typ) {
-		addItem("defaultProvider", "If this provider should be the default for its package", false)
+		addItem("defaultProvider", "If this provider should be the default for its package", postFix.sameLine)
 	}
 	addItem("properties", "A map of resource properties."+
-		" See https://www.pulumi.com/docs/intro/concepts/resources/ for details.", true)
-	addItem("type", "The Pulumi type token for this resource.", false)
+		" See https://www.pulumi.com/docs/intro/concepts/resources/ for details.", postFix.intoObject)
+	addItem("type", "The Pulumi type token for this resource.", postFix.sameLine)
 	addItem("options", "A map of resource options."+
-		" See https://www.pulumi.com/docs/intro/concepts/resources/options/ for details.", true)
+		" See https://www.pulumi.com/docs/intro/concepts/resources/options/ for details.", postFix.intoObject)
 
 	return &protocol.CompletionList{Items: items}, nil
 }
 
-func completeResourcePropertyKeys(c lsp.Client, doc *document, keyPos protocol.Position, s *server) (*protocol.CompletionList, error) {
+func completeResourcePropertyKeys(
+	c lsp.Client, doc *document, keyPos protocol.Position, s *server, postFix postFix,
+) (*protocol.CompletionList, error) {
 	sibs, ok, err := siblingKeys(doc.text, keyPos)
 	if !ok || err != nil {
 		return nil, err
@@ -637,11 +662,11 @@ func completeResourcePropertyKeys(c lsp.Client, doc *document, keyPos protocol.P
 		return nil, err
 	}
 
-	return s.completeProperties(c, resource.InputProperties, util.MapKeys(existingProperties))
+	return s.completeProperties(c, resource.InputProperties, util.MapKeys(existingProperties), postFix, 4)
 }
 
 func completeFunctionArgumentKeys(
-	c lsp.Client, doc *document, invokePos, argumentsPos protocol.Position, s *server,
+	c lsp.Client, doc *document, invokePos, argumentsPos protocol.Position, s *server, postFix postFix, indentLevel int,
 ) (*protocol.CompletionList, error) {
 	keys, err := childKeys(doc.text, invokePos)
 	if err != nil {
@@ -664,7 +689,7 @@ func completeFunctionArgumentKeys(
 		return nil, err
 	}
 
-	return s.completeProperties(c, fn.Inputs.Properties, util.MapKeys(existingProperties))
+	return s.completeProperties(c, fn.Inputs.Properties, util.MapKeys(existingProperties), postFix, indentLevel)
 }
 
 func getTokenAtLine(text lsp.Document, line int) string {
@@ -683,7 +708,8 @@ func getTokenAtLine(text lsp.Document, line int) string {
 // completeProperties computes the set of properties that don't already exist
 // for the represented by `token`, then returns a completion list for those
 // remaining properties.
-func (s *server) completeProperties(c lsp.Client, inputs []*schema.Property, existing []string,
+func (s *server) completeProperties(
+	c lsp.Client, inputs []*schema.Property, existing []string, postFix postFix, indentLevel int,
 ) (*protocol.CompletionList, error) {
 	props := make([]*schema.Property, len(inputs))
 	es := util.NewSet(util.MapOver(existing, strings.ToLower)...)
@@ -691,6 +717,7 @@ func (s *server) completeProperties(c lsp.Client, inputs []*schema.Property, exi
 		if es.Has(strings.ToLower(p.Name)) {
 			continue
 		}
+		contract.Assertf(p != nil, "nil properties are not allowed")
 		props = append(props, p)
 	}
 	completions, err := s.propertyListCompletion(props, "")
@@ -698,8 +725,32 @@ func (s *server) completeProperties(c lsp.Client, inputs []*schema.Property, exi
 		return nil, err
 	}
 	for i, p := range completions.Items {
-		p.InsertText = p.Label + ": "
+		f := postFix.sameLine
+		switch codegen.UnwrapType(props[i].Type).(type) {
+		case *schema.ArrayType:
+			f = postFix.intoList
+		case *schema.MapType, *schema.ObjectType:
+			f = postFix.intoObject
+		}
+		p.InsertText = p.Label + f(indentLevel)
+		p.InsertTextMode = protocol.InsertTextModeAsIs
 		completions.Items[i] = p
 	}
 	return completions, nil
+}
+
+type postFix struct {
+	indentation int
+}
+
+func (p postFix) sameLine(ignored int) string {
+	return ": "
+}
+
+func (p postFix) intoObject(indentationLevel int) string {
+	return ":\n" + strings.Repeat(" ", p.indentation*indentationLevel)
+}
+
+func (p postFix) intoList(indentationLevel int) string {
+	return p.intoObject(indentationLevel) + "- "
 }
