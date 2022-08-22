@@ -422,7 +422,7 @@ func uniqueCompletions(existing []string,
 	items := []protocol.CompletionItem{}
 	e := util.NewSet(util.MapOver(existing, strings.ToLower)...)
 	for _, key := range keys {
-		if !e.Has(key.A) {
+		if !e.Has(strings.ToLower(key.A)) {
 			i := protocol.CompletionItem{
 				Label: key.A,
 			}
@@ -442,6 +442,20 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 		return nil, err
 	}
 	postFix := postFix{indentation}
+
+	matchesPath := func(path ...string) bool {
+		if len(parents) < len(path) {
+			return false
+		}
+		for i := 0; i < len(path); i++ {
+			cmp := strings.ToLower(parents[len(path)-1-i].B)
+			if cmp != path[i] {
+				return false
+			}
+		}
+		return true
+	}
+
 	switch {
 	case !ok: // We are at the top level
 		return completeTopLevelKeys(doc)
@@ -462,11 +476,23 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 		strings.ToLower(parents[2].B) == "resources":
 		return completeResourcePropertyKeys(c, doc, parents[0].A, s, postFix)
 
-	// The Arguments key in a function
-	case len(parents) > 3 &&
-		strings.ToLower(parents[0].B) == "arguments" &&
-		strings.ToLower(parents[1].B) == "fn::invoke":
+	// Arbitrarily nested completion items
+	case matchesPath("fn::invoke", "arguments"):
 		return completeFunctionArgumentKeys(c, doc, parents[1].A, parents[0].A, s, postFix, len(parents))
+	case matchesPath("fn::invoke"):
+		return providedCompletions(doc, parents[0].A, len(parents)+1, []option{
+			{"Function", "string", "The name of the function to invoke.", postFix.sameLine},
+			{"Arguments", "map<string, any>", "The arguments to the function.", postFix.intoObject},
+			{"Return", "string", "An index into the return value.", postFix.sameLine},
+			{"Options", "InvokeOptions", "Options to control the invoke.", postFix.intoObject},
+		})
+	case matchesPath("fn::invoke", "options"):
+		return providedCompletions(doc, parents[0].A, len(parents)+1, []option{
+			{"Parent", "Resource", "The parent resource of this invoke.", postFix.sameLine},
+			{"Provider", "Provider", "The explicit provider for this invoke.", postFix.sameLine},
+			{"Version", "string", "The provider version to use for this invoke.", postFix.sameLine},
+			{"PluginDownloadURL", "string", "The provider plugin download URL to use for this invoke.", postFix.sameLine},
+		})
 
 	default:
 		return nil, nil
@@ -501,6 +527,49 @@ func completeTopLevelKeys(doc *document) (*protocol.CompletionList, error) {
 			{A: "variables", B: setDetails("A map of variable names to their values")},
 		}),
 	}, nil
+}
+
+type option struct {
+	label  string
+	typ    string
+	detail string
+	post   func(int) string
+}
+
+func providedCompletions(
+	doc *document, keyPos protocol.Position, indentLevel int, options []option,
+) (*protocol.CompletionList, error) {
+	sibs, err := childKeys(doc.text, keyPos)
+	if err != nil {
+		return nil, err
+	}
+	setDetails := func(detail, doc string, post func(int) string) func(*protocol.CompletionItem) {
+		return func(c *protocol.CompletionItem) {
+			c.Detail = detail
+			c.InsertText = c.Label + post(indentLevel)
+			c.Documentation = doc
+			c.InsertTextMode = protocol.InsertTextModeAsIs
+		}
+	}
+
+	items := make([]util.Tuple[string, func(*protocol.CompletionItem)], len(options))
+	for i, option := range options {
+		items[i].A = option.label
+		items[i].B = setDetails(option.typ, option.detail, option.post)
+	}
+
+	return &protocol.CompletionList{
+		Items: uniqueCompletions(util.MapOver(util.MapKeys(sibs), func(s string) string {
+			s = strings.ToLower(s)
+			s = strings.TrimSpace(s)
+			parts := strings.Split(s, ":")
+			if len(parts) > 0 {
+				s = parts[0]
+			}
+			return s
+		}), items),
+	}, nil
+
 }
 
 func completeResourceOptionsKeys(doc *document, keyPos protocol.Position, post postFix) (*protocol.CompletionList, error) {
@@ -661,6 +730,30 @@ func completeResourcePropertyKeys(
 	}
 
 	return s.completeProperties(c, resource.InputProperties, util.MapKeys(existingProperties), postFix, 4)
+}
+
+func completeFunctionReturn(
+	c lsp.Client, doc *document, invokePos protocol.Position, s *server, postFix postFix, indentLevel int,
+) (*protocol.CompletionList, error) {
+	keys, err := childKeys(doc.text, invokePos)
+	if err != nil {
+		return nil, err
+	}
+	fnKey, ok := keys["function"]
+	if !ok {
+		return nil, nil
+	}
+	typ := getTokenAtLine(doc.text, int(fnKey.Line))
+	if typ == "" {
+		return nil, nil
+	}
+
+	fn, err := s.schemas.ResolveFunction(c, typ)
+	if err != nil || fn == nil || fn.Inputs == nil {
+		return nil, err
+	}
+
+	return s.completeProperties(c, fn.Inputs.Properties, []string{}, postFix, indentLevel)
 }
 
 func completeFunctionArgumentKeys(
