@@ -573,86 +573,35 @@ func providedCompletions(
 }
 
 func completeResourceOptionsKeys(doc *document, keyPos protocol.Position, post postFix) (*protocol.CompletionList, error) {
-	sibs, err := childKeys(doc.text, keyPos)
-	if err != nil {
-		return nil, err
-	}
-	setDetails := func(detail, doc string, post func(int) string) func(*protocol.CompletionItem) {
-		return func(c *protocol.CompletionItem) {
-			c.Detail = detail
-			// We are indenting to the forth level
-			// resources:
-			//   name:
-			//     options:
-			//       what we are suggestion
-			c.InsertText = c.Label + post(4)
-			c.Documentation = doc
-			c.InsertTextMode = protocol.InsertTextModeAsIs
-		}
-	}
-
-	return &protocol.CompletionList{
-		Items: uniqueCompletions(util.MapOver(util.MapKeys(sibs), func(s string) string {
-			s = strings.ToLower(s)
-			s = strings.TrimSpace(s)
-			parts := strings.Split(s, ":")
-			if len(parts) > 0 {
-				s = parts[0]
-			}
-			return s
-		}), []util.Tuple[string, func(*protocol.CompletionItem)]{
-			{A: "additionalSecretOutputs",
-				B: setDetails("List<String>",
-					"AdditionalSecretOutputs specifies properties that must be encrypted as secrets",
-					post.intoList)},
-			{A: "aliases",
-				B: setDetails("List<String>",
-					"Aliases specifies names that this resource used to be have so that renaming or refactoring doesn’t replace it",
-					post.intoList)},
-			{A: "customTimeouts",
-				B: setDetails("CustomTimeout",
-					"CustomTimeouts overrides the default retry/timeout behavior for resource provisioning",
-					post.intoObject)},
-			{A: "deleteBeforeReplace",
-				B: setDetails("Boolean",
-					"DeleteBeforeReplace overrides the default create-before-delete behavior when replacing",
-					post.sameLine)},
-			{A: "dependsOn",
-				B: setDetails("List<Expression>",
-					"DependsOn makes this resource explicitly depend on another resource, by name, so that it won't be created before the "+
-						"dependent finishes being created (and the reverse for destruction). Normally, Pulumi automatically tracks implicit"+
-						" dependencies through inputs/outputs, but this can be used when dependencies aren't captured purely from input/output edges.",
-					post.intoList)},
-			{A: "ignoreChanges",
-				B: setDetails("List<String>",
-					"IgnoreChanges declares that changes to certain properties should be ignored during diffing",
-					post.intoList)},
-			{A: "import",
-				B: setDetails("String",
-					"Import adopts an existing resource from your cloud account under the control of Pulumi",
-					post.sameLine)},
-			{A: "parent",
-				B: setDetails("Resource",
-					"Parent specifies a parent for the resource",
-					post.sameLine)},
-			{A: "protect",
-				B: setDetails("Boolean",
-					"Protect prevents accidental deletion of a resource",
-					post.sameLine)},
-			{A: "provider",
-				B: setDetails("Provider Resource",
-					"Provider specifies an explicitly configured provider, instead of using the default global provider",
-					post.sameLine)},
-			{A: "providers",
-				B: setDetails("Map<Provider Resource>",
-					"Map of providers for a resource and its children.",
-					post.intoObject)},
-			{A: "version",
-				B: setDetails("String",
-					"Version specifies a provider plugin version that should be used when operating on a resource",
-					post.sameLine)},
-		}),
-	}, nil
+	return providedCompletions(doc, keyPos, 4, []option{
+		{"additionalSecretOutputs", "List<String>",
+			"AdditionalSecretOutputs specifies properties that must be encrypted as secrets", post.intoList},
+		{"aliases", "List<String>",
+			"Aliases specifies names that this resource used to be have so that renaming or refactoring doesn’t replace it", post.intoList},
+		{"customTimeouts", "CustomTimeout",
+			"CustomTimeouts overrides the default retry/timeout behavior for resource provisioning", post.intoObject},
+		{"deleteBeforeReplace", "Boolean",
+			"DeleteBeforeReplace overrides the default create-before-delete behavior when replacing", post.sameLine},
+		{"dependsOn", "List<Expression>",
+			"DependsOn makes this resource explicitly depend on another resource, by name, so that it won't be created before the " +
+				"dependent finishes being created (and the reverse for destruction). Normally, Pulumi automatically tracks implicit" +
+				" dependencies through inputs/outputs, but this can be used when dependencies aren't captured purely from input/output edges.",
+			post.intoList},
+		{"ignoreChanges", "List<String>",
+			"IgnoreChanges declares that changes to certain properties should be ignored during diffing", post.intoList},
+		{"import", "String",
+			"Import adopts an existing resource from your cloud account under the control of Pulumi", post.sameLine},
+		{"parent", "Resource",
+			"Parent specifies a parent for the resource", post.sameLine},
+		{"protect", "Boolean",
+			"Protect prevents accidental deletion of a resource", post.sameLine},
+		{"provider", "Provider Resource",
+			"Provider specifies an explicitly configured provider, instead of using the default global provider", post.sameLine},
+		{"providers", "Map<Provider Resource>",
+			"Map of providers for a resource and its children.", post.intoObject},
+		{"version", "String",
+			"Version specifies a provider plugin version that should be used when operating on a resource", post.sameLine},
+	})
 }
 
 func completeResourceKeys(doc *document, keyPos protocol.Position, postFix postFix) (*protocol.CompletionList, error) {
