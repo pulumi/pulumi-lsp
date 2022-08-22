@@ -76,14 +76,16 @@ func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) 
 //   typePropertyCompletion(type({foo: string, bar: int}), "someType.") would
 //   complete to ["someType.foo", "someType.bar"].
 func (s *server) typePropertyCompletion(t schema.Type, filterPrefix string) (*protocol.CompletionList, error) {
+	var props []*schema.Property
 	switch t := codegen.UnwrapType(t).(type) {
 	case *schema.ResourceType:
-		return s.propertyListCompletion(util.ResourceProperties(t.Resource), filterPrefix)
+		props = util.ResourceProperties(t.Resource)
 	case *schema.ObjectType:
-		return s.propertyListCompletion(t.Properties, filterPrefix)
+		props = t.Properties
 	default:
 		return nil, nil
 	}
+	return s.propertyListCompletion(util.StripNils(props), filterPrefix)
 }
 
 // Returns the completion option for a property list. filterPrefix is pre-appended to the filter property of all results.
@@ -720,6 +722,7 @@ func (s *server) completeProperties(
 		contract.Assertf(p != nil, "nil properties are not allowed")
 		props = append(props, p)
 	}
+	props = util.StripNils(props)
 	completions, err := s.propertyListCompletion(props, "")
 	if err != nil {
 		return nil, err

@@ -137,12 +137,17 @@ func (l SchemaCache) ResolveResource(c lsp.Client, token string) (*schema.Resour
 		return nil, fmt.Errorf("Invalid token '%s': too few spans", token)
 	}
 	pkg = tokens[0]
+	var isProvider bool
 	if strings.HasPrefix(token, "pulumi:providers:") {
+		isProvider = true
 		pkg = tokens[2]
 	}
 	schema, err := l.Loader(c).LoadPackageReference(pkg, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Could not resolve resource: %w", err)
+	}
+	if isProvider {
+		return schema.Provider()
 	}
 	resolvedToken, err := yaml.NewResourcePackage(schema).ResolveResource(token)
 	if err != nil {

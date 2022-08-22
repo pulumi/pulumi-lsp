@@ -76,3 +76,14 @@ func ReverseList[T any](l []T) []T {
 	}
 	return rev
 }
+
+func StripNils[T any](l []*T) []*T {
+	out := make([]*T, 0, len(l))
+	for _, v := range l {
+		if v == nil {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
+}
