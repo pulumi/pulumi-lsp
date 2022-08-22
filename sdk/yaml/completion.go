@@ -456,6 +456,10 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 		return true
 	}
 
+	providedCompletions := func(options []option) (*protocol.CompletionList, error) {
+		return providedCompletions(doc, parents[0].A, len(parents)+1, options)
+	}
+
 	switch {
 	case !ok: // We are at the top level
 		return completeTopLevelKeys(doc)
@@ -480,22 +484,127 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 	case matchesPath("fn::invoke", "arguments"):
 		return completeFunctionArgumentKeys(c, doc, parents[1].A, parents[0].A, s, postFix, len(parents))
 	case matchesPath("fn::invoke"):
-		return providedCompletions(doc, parents[0].A, len(parents)+1, []option{
+		return providedCompletions([]option{
 			{"Function", "string", "The name of the function to invoke.", postFix.sameLine},
 			{"Arguments", "map<string, any>", "The arguments to the function.", postFix.intoObject},
 			{"Return", "string", "An index into the return value.", postFix.sameLine},
 			{"Options", "InvokeOptions", "Options to control the invoke.", postFix.intoObject},
 		})
 	case matchesPath("fn::invoke", "options"):
-		return providedCompletions(doc, parents[0].A, len(parents)+1, []option{
+		return providedCompletions([]option{
 			{"Parent", "Resource", "The parent resource of this invoke.", postFix.sameLine},
 			{"Provider", "Provider", "The explicit provider for this invoke.", postFix.sameLine},
 			{"Version", "string", "The provider version to use for this invoke.", postFix.sameLine},
 			{"PluginDownloadURL", "string", "The provider plugin download URL to use for this invoke.", postFix.sameLine},
 		})
-
 	default:
+		line, err := doc.text.Line(int(params.Position.Line))
+		if err != nil {
+			return nil, err
+		}
+		line = strings.TrimSpace(line)
+
+		c.LogInfof("Completing for len(parent) = %d with line = %q", len(parents), line)
+		if len(parents) >= 2 && strings.HasPrefix(strings.ToLower(line), "fn::") {
+			builtinFns := util.MapOver([]option{
+				{"Join", "", "Join a list of strings together.", postFix.intoList},
+				{"Split", "", "Split a string into a list.", postFix.intoList},
+				{"ToJSON", "", "Encode a value into a string as JSON.", postFix.intoList},
+				{"Select", "", "Select an element from a list by index.", postFix.intoList},
+				{"ToBase64", "", "Encode a string with base64", postFix.intoList},
+				{"FileAsset", "", "Create an Asset from a file path.", postFix.sameLine},
+				{"StringAsset", "", "Create an Asset from a string.", postFix.sameLine},
+				{"RemoteAsset", "", "Create an Asset from a remote URL.", postFix.sameLine},
+				{"FileArchive", "", "Create an Archive from a file path.", postFix.sameLine},
+				{"RemoteArchive", "", "Create an Archive from a remote URL", postFix.sameLine},
+				{"AssetArchive", "", "Create an Archive from a map of Assets or Archives.", postFix.intoObject},
+				{"Secret", "", "Make a value secret", postFix.sameLine},
+				{"ReadFile", "", "Read a file into a string.", postFix.sameLine},
+			}, func(o option) protocol.CompletionItem {
+				return protocol.CompletionItem{
+					CommitCharacters: []string{":"},
+					Detail:           o.typ,
+					Documentation:    o.detail,
+					InsertText:       "Fn::" + o.label + o.post(len(parents)+1),
+					Kind:             protocol.CompletionItemKindFunction,
+					InsertTextMode:   protocol.InsertTextModeAsIs,
+					Label:            o.label,
+					SortText:         o.label,
+					FilterText:       "Fn::" + o.label,
+				}
+			})
+			lst := s.pkgCompletionList(false /* pad */)
+			lst.Items = append(util.MapOver(lst.Items, func(i protocol.CompletionItem) protocol.CompletionItem {
+				i.InsertText = "Fn::" + i.InsertText
+				i.FilterText = "Fn::" + i.FilterText
+				i.Kind = protocol.CompletionItemKindModule
+				i.Label = "Fn::" + i.Label
+				return i
+			}), builtinFns...)
+			return lst, nil
+		}
 		return nil, nil
+		// case matchesPath("fn::join"):
+		// 	return providedCompletions([]option{
+		// 		{"Delimiter", "string", "The string to insert between elements.", postFix.sameLine},
+		// 		{"Elements", "List<string>", "The list of elements to join.", postFix.intoList},
+		// 	})
+		// case matchesPath("fn::split"):
+		// 	return providedCompletions([]option{
+		// 		{"Delimiter", "string", "The string to split the source by.", postFix.sameLine},
+		// 		{"Source", "string", "The string to split.", postFix.sameLine},
+		// 	})
+		// case matchesPath("fn::tojson"):
+		// 	return providedCompletions([]option{
+		// 		{"Value", "any", "The value to encode as JSON.", postFix.sameLine},
+		// 	})
+		// case matchesPath("fn::select"):
+		// 	return providedCompletions([]option{
+		// 		{"Index", "int", "The position of the array to return.", postFix.sameLine},
+		// 		// This will probably not be a list literal, so we indent so a variable can be selected.
+		// 		{"Values", "List<any>", "The list to index into.", postFix.sameLine},
+		// 	})
+		// case matchesPath("fn::tobase64"):
+		// 	return providedCompletions([]option{
+		// 		{"Value", "string", "The string to encode to base64.", postFix.sameLine},
+		// 	})
+		// case matchesPath("fn::frombase64"):
+		// 	return providedCompletions([]option{
+		// 		{"Value", "string", "The string to decode from base64.", postFix.sameLine},
+		// 	})
+		// case matchesPath("fn::fileasset"):
+		// 	return providedCompletions([]option{
+		// 		{"Source", "string", "The path to the file asset on disk.", postFix.sameLine},
+		// 	})
+		// case matchesPath("fn::stringasset"):
+		// 	return providedCompletions([]option{
+		// 		{"Source", "string", "The value of the StringAsset.", postFix.sameLine},
+		// 	})
+		// case matchesPath("fn::remoteasset"):
+		// 	return providedCompletions([]option{
+		// 		{"Source", "string", "The URL of the RemoteAsset.", postFix.sameLine},
+		// 	})
+		// case matchesPath("fn::filearchive"):
+		// 	return providedCompletions([]option{
+		// 		{"Source", "string", "The path to root directory of the FileArchive", postFix.sameLine},
+		// 	})
+		// case matchesPath("fn::remotearchive"):
+		// 	return providedCompletions([]option{
+		// 		{"Source", "string", "The URL of root directory of the RemoteArchive", postFix.sameLine},
+		// 	})
+		// case matchesPath("fn::assetarchive"):
+		// 	return providedCompletions([]option{
+		// 		{"AssetOrArchives ", "Map<string,AssetOrArchive>",
+		// 			"A map of entries to assets or archives.", postFix.intoObject},
+		// 	})
+		// case matchesPath("fn::secret"):
+		// 	return providedCompletions([]option{
+		// 		{"Value", "any", "The value to be made secret.", postFix.sameLine},
+		// 	})
+		// case matchesPath("fn::readfile"):
+		// 	return providedCompletions([]option{
+		// 		{"Path", "string", "The path to the file to read.", postFix.sameLine},
+		// 	})
 	}
 }
 
