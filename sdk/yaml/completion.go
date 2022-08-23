@@ -519,11 +519,11 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 					CommitCharacters: []string{":"},
 					Detail:           o.typ,
 					Documentation:    o.detail,
-					InsertText:       o.label + o.post(len(parents)+1),
-					Kind:             protocol.CompletionItemKindFunction,
+					InsertText:       "Fn::" + o.label + o.post(len(parents)+1),
 					InsertTextMode:   protocol.InsertTextModeAsIs,
+					Kind:             protocol.CompletionItemKindFunction,
 					Label:            o.label,
-					SortText:         o.label,
+					SortText:         "2" + o.label,
 					FilterText:       "Fn::" + o.label,
 				}
 			})
@@ -540,9 +540,11 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 					return &protocol.CompletionItem{
 						CommitCharacters: []string{":"},
 						Documentation:    p.Description(),
-						InsertText:       "Fn::" + p.Name() + ":",
+						InsertText:       p.Name() + ":",
 						Kind:             protocol.CompletionItemKindModule,
 						Label:            p.Name(),
+						FilterText:       "Fn::" + p.Name(),
+						SortText:         "1" + p.Name(),
 					}
 				})
 				return &protocol.CompletionList{Items: append(lst, builtinFns...)}, nil
@@ -550,7 +552,7 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 				// Here we are completing only modules or top level invokes
 				for _, b := range builtins {
 					if strings.ToLower(b.label) == parts[0] {
-						c.LogInfof("Not indexing into a known builtin")
+						c.LogInfof("Not loading the package for a builtin function: %s", b.label)
 						return nil, nil
 					}
 				}
@@ -581,12 +583,19 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 						if err != nil {
 							continue
 						}
+						label := tk[0] + ":" + tk[2]
+						depreciated := f.DeprecationMessage != ""
+						sortText := "1" + label
+						if depreciated {
+							sortText = "9" + label
+						}
 						mods[tk[2]] = protocol.CompletionItem{
-							Label:      tk[0] + ":" + tk[2],
+							Label:      label,
 							InsertText: tk[2],
 							Kind:       protocol.CompletionItemKindFunction,
-							Deprecated: f.DeprecationMessage != "",
+							Deprecated: depreciated,
 							Detail:     f.Comment,
+							SortText:   sortText,
 						}
 						continue
 					}
@@ -597,6 +606,7 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 						CommitCharacters: []string{":"},
 						InsertText:       mod + ":",
 						Kind:             protocol.CompletionItemKindModule,
+						SortText:         "2" + mod,
 					}
 				}
 				return &protocol.CompletionList{Items: util.MapValues(mods)}, nil
@@ -627,13 +637,19 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 					if err != nil {
 						return nil, err
 					}
+					depreciated := f.DeprecationMessage != ""
+					sortText := "1" + token
+					if depreciated {
+						sortText = "9" + token
+					}
 					fns = append(fns, protocol.CompletionItem{
 						Label:            token,
 						CommitCharacters: []string{":"},
 						InsertText:       tk[2] + ":", // TODO: add a postFix here
 						Kind:             protocol.CompletionItemKindFunction,
-						Deprecated:       f.DeprecationMessage != "",
+						Deprecated:       depreciated,
 						Detail:           f.Comment,
+						SortText:         sortText,
 					})
 				}
 				return &protocol.CompletionList{Items: fns}, nil
