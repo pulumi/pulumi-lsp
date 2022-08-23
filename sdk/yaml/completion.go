@@ -216,8 +216,28 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 			client.LogInfof("Completing %v", parts)
 			switch len(parts) {
 			case 1:
-				doPad := strings.TrimPrefix(line, prefix)
-				return s.pkgCompletionList(doPad == ""), nil
+				doPad := strings.TrimPrefix(line, prefix) == ""
+				return &protocol.CompletionList{
+					Items: s.pkgCompletionList(func(p schema.PackageReference) *protocol.CompletionItem {
+						hasResources := p.Resources().Range().Next()
+						if !hasResources {
+							return nil
+						}
+						insertText := p.Name() + ":"
+						if doPad {
+							insertText = " " + insertText
+						}
+						return &protocol.CompletionItem{
+							CommitCharacters: []string{":"},
+							Documentation:    p.Description(),
+							FilterText:       p.Name(),
+							InsertText:       insertText,
+							InsertTextFormat: protocol.InsertTextFormatPlainText,
+							InsertTextMode:   protocol.InsertTextModeAsIs,
+							Kind:             protocol.CompletionItemKindModule,
+							Label:            p.Name(),
+						}
+					})}, nil
 			case 2:
 
 				// "pulumi" is a special package with a single module: "providers"
@@ -289,39 +309,12 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 }
 
 // Return the list of currently loaded packages.
-func (s *server) pkgCompletionList(pad bool) *protocol.CompletionList {
+func (s *server) pkgCompletionList(getItem func(p schema.PackageReference) *protocol.CompletionItem) []protocol.CompletionItem {
 	s.schemas.m.Lock()
 	defer s.schemas.m.Unlock()
-	insertText := func(name string) string {
-		name = name + ":"
-		if pad {
-			name = " " + name
-		}
-		return name
-	}
-	return &protocol.CompletionList{
-		Items: append(util.MapOver(util.MapValues(s.schemas.cache), func(p schema.PackageReference) protocol.CompletionItem {
-			return protocol.CompletionItem{
-				CommitCharacters: []string{":"},
-				// TODO: Add back after https://github.com/pulumi/pulumi/pull/9800 merges
-				// Documentation:    p.Description(),
-				FilterText:       p.Name(),
-				InsertText:       insertText(p.Name()),
-				InsertTextFormat: protocol.InsertTextFormatPlainText,
-				InsertTextMode:   protocol.InsertTextModeAsIs,
-				Kind:             protocol.CompletionItemKindModule,
-				Label:            p.Name(),
-			}
-		}), protocol.CompletionItem{
-			CommitCharacters: []string{":"},
-			FilterText:       "pulumi",
-			InsertText:       insertText("pulumi"),
-			InsertTextFormat: protocol.InsertTextFormatPlainText,
-			InsertTextMode:   protocol.InsertTextModeAsIs,
-			Kind:             protocol.CompletionItemKindModule,
-			Label:            "pulumi",
-		}),
-	}
+	schemas := util.MapValues(s.schemas.cache)
+	schemas = append(schemas, schema.DefaultPulumiPackage.Reference())
+	return util.FilterMap(schemas, getItem)
 }
 
 // Return the completion list of modules for a given package.
@@ -505,27 +498,28 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 		line = strings.TrimSpace(line)
 
 		c.LogInfof("Completing for len(parent) = %d with line = %q", len(parents), line)
+		builtins := []option{
+			{"Join", "", "Join a list of strings together.", postFix.intoList},
+			{"Split", "", "Split a string into a list.", postFix.intoList},
+			{"ToJSON", "", "Encode a value into a string as JSON.", postFix.intoList},
+			{"Select", "", "Select an element from a list by index.", postFix.intoList},
+			{"ToBase64", "", "Encode a string with base64", postFix.intoList},
+			{"FileAsset", "", "Create an Asset from a file path.", postFix.sameLine},
+			{"StringAsset", "", "Create an Asset from a string.", postFix.sameLine},
+			{"RemoteAsset", "", "Create an Asset from a remote URL.", postFix.sameLine},
+			{"FileArchive", "", "Create an Archive from a file path.", postFix.sameLine},
+			{"RemoteArchive", "", "Create an Archive from a remote URL", postFix.sameLine},
+			{"AssetArchive", "", "Create an Archive from a map of Assets or Archives.", postFix.intoObject},
+			{"Secret", "", "Make a value secret", postFix.sameLine},
+			{"ReadFile", "", "Read a file into a string.", postFix.sameLine},
+		}
 		if len(parents) >= 2 && strings.HasPrefix(strings.ToLower(line), "fn::") {
-			builtinFns := util.MapOver([]option{
-				{"Join", "", "Join a list of strings together.", postFix.intoList},
-				{"Split", "", "Split a string into a list.", postFix.intoList},
-				{"ToJSON", "", "Encode a value into a string as JSON.", postFix.intoList},
-				{"Select", "", "Select an element from a list by index.", postFix.intoList},
-				{"ToBase64", "", "Encode a string with base64", postFix.intoList},
-				{"FileAsset", "", "Create an Asset from a file path.", postFix.sameLine},
-				{"StringAsset", "", "Create an Asset from a string.", postFix.sameLine},
-				{"RemoteAsset", "", "Create an Asset from a remote URL.", postFix.sameLine},
-				{"FileArchive", "", "Create an Archive from a file path.", postFix.sameLine},
-				{"RemoteArchive", "", "Create an Archive from a remote URL", postFix.sameLine},
-				{"AssetArchive", "", "Create an Archive from a map of Assets or Archives.", postFix.intoObject},
-				{"Secret", "", "Make a value secret", postFix.sameLine},
-				{"ReadFile", "", "Read a file into a string.", postFix.sameLine},
-			}, func(o option) protocol.CompletionItem {
+			builtinFns := util.MapOver(builtins, func(o option) protocol.CompletionItem {
 				return protocol.CompletionItem{
 					CommitCharacters: []string{":"},
 					Detail:           o.typ,
 					Documentation:    o.detail,
-					InsertText:       "Fn::" + o.label + o.post(len(parents)+1),
+					InsertText:       o.label + o.post(len(parents)+1),
 					Kind:             protocol.CompletionItemKindFunction,
 					InsertTextMode:   protocol.InsertTextModeAsIs,
 					Label:            o.label,
@@ -533,15 +527,117 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 					FilterText:       "Fn::" + o.label,
 				}
 			})
-			lst := s.pkgCompletionList(false /* pad */)
-			lst.Items = append(util.MapOver(lst.Items, func(i protocol.CompletionItem) protocol.CompletionItem {
-				i.InsertText = "Fn::" + i.InsertText
-				i.FilterText = "Fn::" + i.FilterText
-				i.Kind = protocol.CompletionItemKindModule
-				i.Label = "Fn::" + i.Label
-				return i
-			}), builtinFns...)
-			return lst, nil
+			parts := strings.Split(strings.TrimPrefix(strings.ToLower(line), "fn::"), ":")
+			c.LogInfof("Completing for Fn for %v", parts)
+			switch len(parts) {
+			case 1:
+				// Complete either builtins or packages
+				lst := s.pkgCompletionList(func(p schema.PackageReference) *protocol.CompletionItem {
+					hasFunctions := p.Functions().Range().Next()
+					if !hasFunctions {
+						return nil
+					}
+					return &protocol.CompletionItem{
+						CommitCharacters: []string{":"},
+						Documentation:    p.Description(),
+						InsertText:       "Fn::" + p.Name() + ":",
+						Kind:             protocol.CompletionItemKindModule,
+						Label:            p.Name(),
+					}
+				})
+				return &protocol.CompletionList{Items: append(lst, builtinFns...)}, nil
+			case 2:
+				// Here we are completing only modules or top level invokes
+				for _, b := range builtins {
+					if strings.ToLower(b.label) == parts[0] {
+						c.LogInfof("Not indexing into a known builtin")
+						return nil, nil
+					}
+				}
+				pkg, err := s.schemas.Loader(c).LoadPackageReference(parts[0], nil)
+				if err != nil {
+					return nil, err
+				}
+				mods := map[string]protocol.CompletionItem{}
+				for iter := pkg.Functions().Range(); iter.Next(); {
+					token := iter.Token()
+					tk := strings.Split(token, ":")
+					if len(tk) < 3 {
+						continue
+					}
+					if _, ok := mods[tk[1]]; ok {
+						continue
+					}
+
+					mod := token[0 : len(tk[1])+len(tk[0])+1]
+					// Converting pkg:mod/name:name to pkg:mod:name
+					if m := strings.Split(tk[1], "/"); len(m) == 2 && m[1] == tk[2] {
+						mod = m[0]
+					}
+
+					// Getting top level functions
+					if mod == "index" || mod == "" {
+						f, err := iter.Function()
+						if err != nil {
+							continue
+						}
+						mods[tk[2]] = protocol.CompletionItem{
+							Label:      tk[0] + ":" + tk[2],
+							InsertText: tk[2],
+							Kind:       protocol.CompletionItemKindFunction,
+							Deprecated: f.DeprecationMessage != "",
+							Detail:     f.Comment,
+						}
+						continue
+					}
+
+					// Modules
+					mods[tk[1]] = protocol.CompletionItem{
+						Label:            mod,
+						CommitCharacters: []string{":"},
+						InsertText:       mod + ":",
+						Kind:             protocol.CompletionItemKindModule,
+					}
+				}
+				return &protocol.CompletionList{Items: util.MapValues(mods)}, nil
+
+			case 3:
+				// Here we are completing only invokes in specific modules
+				pkg, err := s.schemas.Loader(c).LoadPackageReference(parts[0], nil)
+				if err != nil {
+					return nil, err
+				}
+				fns := []protocol.CompletionItem{}
+				for iter := pkg.Functions().Range(); iter.Next(); {
+					token := iter.Token()
+					tk := strings.Split(token, ":")
+					if len(tk) != 3 {
+						continue
+					}
+					mod := token[0 : len(tk[1])+len(tk[0])+1]
+					// Converting pkg:mod/name:name to pkg:mod:name
+					if m := strings.Split(tk[1], "/"); len(m) == 2 && m[1] == tk[2] {
+						mod = m[0]
+					}
+					if mod != parts[1] {
+						continue
+					}
+					token = tk[0] + ":" + mod + ":" + tk[2]
+					f, err := iter.Function()
+					if err != nil {
+						return nil, err
+					}
+					fns = append(fns, protocol.CompletionItem{
+						Label:            token,
+						CommitCharacters: []string{":"},
+						InsertText:       tk[2] + ":", // TODO: add a postFix here
+						Kind:             protocol.CompletionItemKindFunction,
+						Deprecated:       f.DeprecationMessage != "",
+						Detail:           f.Comment,
+					})
+				}
+				return &protocol.CompletionList{Items: fns}, nil
+			}
 		}
 		return nil, nil
 		// case matchesPath("fn::join"):

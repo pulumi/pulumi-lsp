@@ -26,6 +26,16 @@ func MapOver[T any, U any, F func(T) U](arr []T, f F) []U {
 	return l
 }
 
+func FilterMap[T any, U any, F func(T) *U](arr []T, f F) []U {
+	l := make([]U, 0, len(arr))
+	for _, t := range arr {
+		if v := f(t); v != nil {
+			l = append(l, *v)
+		}
+	}
+	return l
+}
+
 type Tuple[A any, B any] struct {
 	A A
 	B B
