@@ -26,6 +26,16 @@ func MapOver[T any, U any, F func(T) U](arr []T, f F) []U {
 	return l
 }
 
+func FilterMap[T any, U any, F func(T) *U](arr []T, f F) []U {
+	l := make([]U, 0, len(arr))
+	for _, t := range arr {
+		if v := f(t); v != nil {
+			l = append(l, *v)
+		}
+	}
+	return l
+}
+
 type Tuple[A any, B any] struct {
 	A A
 	B B
@@ -75,4 +85,15 @@ func ReverseList[T any](l []T) []T {
 		rev = append(rev, l[i])
 	}
 	return rev
+}
+
+func StripNils[T any](l []*T) []*T {
+	out := make([]*T, 0, len(l))
+	for _, v := range l {
+		if v == nil {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
 }

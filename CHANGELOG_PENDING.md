@@ -9,4 +9,7 @@
 - [completion] Add support for the `defaultProvider` resource field.
   [#47](https://github.com/pulumi/pulumi-lsp/pull/47)
 
+- [completion] Add support for completing `Fn::*`.
+  [#48](https://github.com/pulumi/pulumi-lsp/pull/48)
+
 ### Bug Fixes

@@ -23,6 +23,9 @@ type Step[T any] struct {
 // is true if a computed value is returned. False indicates that the attempt
 // failed.
 func (s *Step[T]) TryGetResult() (T, bool) {
+	if s == nil {
+		return Zero[T](), false
+	}
 	select {
 	case <-s.done:
 		return s.data, true
