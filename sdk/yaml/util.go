@@ -138,10 +138,13 @@ func (l SchemaCache) ResolveResource(c lsp.Client, token string) (*schema.Resour
 	}
 	pkg = tokens[0]
 	var isProvider bool
-	if strings.HasPrefix(token, "pulumi:providers:") {
+	if pkg == "pulumi" {
 		isProvider = true
-		pkg = tokens[2]
+		if tokens[1] == "providers" && len(tokens) > 2 {
+			pkg = tokens[2]
+		}
 	}
+
 	schema, err := l.Loader(c).LoadPackageReference(pkg, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Could not resolve resource: %w", err)
