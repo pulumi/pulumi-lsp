@@ -801,7 +801,7 @@ func getTokenAtLine(text lsp.Document, line int) string {
 func (s *server) completeProperties(
 	c lsp.Client, inputs []*schema.Property, existing []string, postFix postFix, indentLevel int,
 ) (*protocol.CompletionList, error) {
-	props := make([]*schema.Property, len(inputs))
+	props := make([]*schema.Property, 0, len(inputs))
 	es := util.NewSet(util.MapOver(existing, strings.ToLower)...)
 	for _, p := range inputs {
 		if es.Has(strings.ToLower(p.Name)) {

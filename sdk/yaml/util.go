@@ -118,7 +118,6 @@ func (l SchemaLoader) LoadPackageReference(pkg string, version *semver.Version) 
 		}
 	}
 	return load, err
-
 }
 
 func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.Package, error) {
