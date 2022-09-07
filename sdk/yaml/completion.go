@@ -201,38 +201,47 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 	if err != nil {
 		return nil, err
 	}
+
+	// All completing types (`type:` and `Function:`) are of the form
+	// ${key}: ${Type}
+	// which means that if we see `pos` after the second object, we don't want to complete anymore
+	if fields := strings.Fields(line); len(fields) > 1 {
+		keyFieldEndIdx := strings.Index(line, fields[0]) + len(fields[0])
+		l := line[keyFieldEndIdx:]
+		typeFieldEndIdx := strings.Index(l, fields[1]) + len(fields[1]) + keyFieldEndIdx
+		if pos.Character > uint32(typeFieldEndIdx) {
+			client.LogWarningf("Examining fields %v for type completion: aborting with %d > %d",
+				fields, pos.Character, uint32(typeFieldEndIdx))
+			return nil, nil
+		}
+	}
+
 	line = strings.TrimSpace(line)
 
-	var version *semver.Version
-	(func() {
+	version := func() *semver.Version {
 		sibs, ok, err := siblingKeys(doc.text, pos)
 		if err == nil || !ok {
-			return
+			return nil
 		}
 		opts, ok := sibs["options"]
 		if !ok {
-			return
+			return nil
 		}
-		children, err := childKeys(doc.text, opts)
+		v, ok, err := getNestedKey(doc.text, opts, "version")
+		if !ok || err != nil {
+			return nil
+		}
+
+		s, err := extractVersionString(doc.text, v)
 		if err != nil {
-			return
+			return nil
 		}
-		v, ok := children["version"]
-		if !ok {
-			return
-		}
-		line, err := doc.text.Line(int(v.Line))
+		version, err := semver.ParseTolerant(strings.TrimSpace(s))
 		if err != nil {
-			return
+			return nil
 		}
-		txt := strings.SplitN(line, ":", 1)
-		if len(txt) <= 1 {
-			return
-		}
-		if v, err := semver.ParseTolerant(strings.TrimSpace(txt[1])); err == nil {
-			version = &v
-		}
-	})()
+		return &version
+	}
 
 	handleType := func(prefix string, resolve func(schema.PackageReference, string) []protocol.CompletionItem) (*protocol.CompletionList, error) {
 		if strings.HasPrefix(line, prefix) {
@@ -264,7 +273,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 						}},
 					}, nil
 				}
-				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], version)
+				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], version())
 				if err != nil {
 					return nil, err
 				}
@@ -296,7 +305,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 					// There are no valid completions for this token
 					return nil, nil
 				}
-				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], version)
+				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], version())
 				if err != nil {
 					return nil, err
 				}
