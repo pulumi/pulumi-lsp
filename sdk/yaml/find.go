@@ -49,7 +49,11 @@ func (doc *document) objectAtPoint(pos protocol.Position) (Object, error) {
 			if bound.A == nil {
 				return nil, nilError
 			}
-			res, err := bound.A.GetResources(tk)
+			version := ""
+			if v := r.Value.Options.Version; v != nil {
+				version = v.Value
+			}
+			res, err := bound.A.GetResources(tk, version)
 			if err != nil {
 				return nil, err
 			}

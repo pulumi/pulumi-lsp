@@ -130,7 +130,7 @@ func (l SchemaLoader) LoadPackage(pkg string, version *semver.Version) (*schema.
 }
 
 // ResolveResource resolves an arbitrary resource token into an appropriate schema.Resource.
-func (l SchemaCache) ResolveResource(c lsp.Client, token string) (*schema.Resource, error) {
+func (l SchemaCache) ResolveResource(c lsp.Client, token, version string) (*schema.Resource, error) {
 	tokens := strings.Split(token, ":")
 	var pkg string
 	if len(tokens) < 2 {
@@ -140,7 +140,16 @@ func (l SchemaCache) ResolveResource(c lsp.Client, token string) (*schema.Resour
 	if strings.HasPrefix(token, "pulumi:providers:") {
 		pkg = tokens[2]
 	}
-	schema, err := l.Loader(c).LoadPackageReference(pkg, nil)
+
+	var v *semver.Version
+	if version != "" {
+		version, err := semver.ParseTolerant(version)
+		if err != nil {
+			return nil, err
+		}
+		v = &version
+	}
+	schema, err := l.Loader(c).LoadPackageReference(pkg, v)
 	if err != nil {
 		return nil, fmt.Errorf("Could not resolve resource: %w", err)
 	}
@@ -161,13 +170,21 @@ func (l SchemaCache) ResolveResource(c lsp.Client, token string) (*schema.Resour
 }
 
 // ResolveFunction resolves an arbitrary function token into an appropriate schema.Resource.
-func (l SchemaCache) ResolveFunction(c lsp.Client, token string) (*schema.Function, error) {
+func (l SchemaCache) ResolveFunction(c lsp.Client, token, version string) (*schema.Function, error) {
 	tokens := strings.Split(token, ":")
 	if len(tokens) < 2 {
 		return nil, fmt.Errorf("Invalid token '%s': too few spans", token)
 	}
 	pkg := tokens[0]
-	schema, err := l.Loader(c).LoadPackageReference(pkg, nil)
+	var v *semver.Version
+	if version != "" {
+		version, err := semver.ParseTolerant(version)
+		if err != nil {
+			return nil, err
+		}
+		v = &version
+	}
+	schema, err := l.Loader(c).LoadPackageReference(pkg, v)
 	if err != nil {
 		return nil, fmt.Errorf("Could not resolve function: %w", err)
 	}

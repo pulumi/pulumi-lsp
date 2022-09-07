@@ -7,6 +7,7 @@ import (
 
 	"go.lsp.dev/protocol"
 
+	"github.com/blang/semver"
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
@@ -202,6 +203,37 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 	}
 	line = strings.TrimSpace(line)
 
+	var version *semver.Version
+	(func() {
+		sibs, ok, err := siblingKeys(doc.text, pos)
+		if err == nil || !ok {
+			return
+		}
+		opts, ok := sibs["options"]
+		if !ok {
+			return
+		}
+		children, err := childKeys(doc.text, opts)
+		if err != nil {
+			return
+		}
+		v, ok := children["version"]
+		if !ok {
+			return
+		}
+		line, err := doc.text.Line(int(v.Line))
+		if err != nil {
+			return
+		}
+		txt := strings.SplitN(line, ":", 1)
+		if len(txt) <= 1 {
+			return
+		}
+		if v, err := semver.ParseTolerant(strings.TrimSpace(txt[1])); err == nil {
+			version = &v
+		}
+	})()
+
 	handleType := func(prefix string, resolve func(schema.PackageReference, string) []protocol.CompletionItem) (*protocol.CompletionList, error) {
 		if strings.HasPrefix(line, prefix) {
 			currentWord := strings.TrimSpace(strings.TrimPrefix(line, prefix))
@@ -232,7 +264,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 						}},
 					}, nil
 				}
-				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], nil)
+				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], version)
 				if err != nil {
 					return nil, err
 				}
@@ -264,7 +296,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 					// There are no valid completions for this token
 					return nil, nil
 				}
-				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], nil)
+				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], version)
 				if err != nil {
 					return nil, err
 				}
@@ -653,12 +685,56 @@ func completeResourcePropertyKeys(
 	if err != nil {
 		return nil, err
 	}
-	resource, err := s.schemas.ResolveResource(c, typ)
+	var version string
+	if p, ok := sibs["options"]; ok {
+		v, ok, err := getNestedKey(doc.text, p, "version")
+		if err != nil {
+			return nil, err
+		} else if ok {
+			s, err := extractVersionString(doc.text, v)
+			if err != nil {
+				return nil, err
+			}
+			version = s
+		}
+	}
+	resource, err := s.schemas.ResolveResource(c, typ, version)
 	if err != nil || resource == nil {
 		return nil, err
 	}
 
 	return s.completeProperties(c, resource.InputProperties, util.MapKeys(existingProperties), postFix, 4)
+}
+
+// Walk a path of object keys, retrieving the position of the final key.
+func getNestedKey(text lsp.Document, pos protocol.Position, path ...string) (protocol.Position, bool, error) {
+	if len(path) == 0 {
+		return pos, true, nil
+	}
+	m, err := childKeys(text, pos)
+	if err != nil {
+		return protocol.Position{}, false, err
+	}
+	d, ok := m[path[0]]
+	if !ok {
+		return protocol.Position{}, false, nil
+	}
+	return getNestedKey(text, d, path[1:]...)
+}
+
+// Extract the version string from a line.
+//
+// If the string is empty, `"", nil` is a valid return value.
+func extractVersionString(text lsp.Document, pos protocol.Position) (string, error) {
+	line, err := text.Line(int(pos.Line))
+	if err != nil {
+		return "", err
+	}
+	parts := strings.SplitN(line, ":", 1)
+	if len(parts) > 1 {
+		return strings.TrimSpace(parts[1]), nil
+	}
+	return "", nil
 }
 
 func completeFunctionArgumentKeys(
@@ -680,7 +756,21 @@ func completeFunctionArgumentKeys(
 	if err != nil {
 		return nil, err
 	}
-	fn, err := s.schemas.ResolveFunction(c, typ)
+	var version string
+	if opts, ok := keys["option"]; ok {
+		v, ok, err := getNestedKey(doc.text, opts, "version")
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			s, err := extractVersionString(doc.text, v)
+			if err != nil {
+				return nil, err
+			}
+			version = s
+		}
+	}
+	fn, err := s.schemas.ResolveFunction(c, typ, version)
 	if err != nil || fn == nil || fn.Inputs == nil {
 		return nil, err
 	}

@@ -11,7 +11,7 @@ import (
 )
 
 // Return a list of all resources whose token matches `tk`.
-func (d *Decl) GetResources(tk string) ([]Resource, error) {
+func (d *Decl) GetResources(tk, version string) ([]Resource, error) {
 	d.lock.RLock()
 	defer d.lock.RUnlock()
 	// First we load the token, so we can get the alias list
@@ -19,7 +19,7 @@ func (d *Decl) GetResources(tk string) ([]Resource, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Cannot get resources: %w", err)
 	}
-	pkg, ok := d.loadedPackages[pkgName]
+	pkg, ok := d.loadedPackages[pkgKey{pkgName, version}]
 	// We didn't have access to that package
 	if !ok {
 		return nil, fmt.Errorf(

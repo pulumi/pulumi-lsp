@@ -37,9 +37,14 @@ type Decl struct {
 
 	diags hcl.Diagnostics
 
-	loadedPackages map[string]pkgCache
+	loadedPackages map[pkgKey]pkgCache
 
 	lock *sync.RWMutex
+}
+
+type pkgKey struct {
+	name    string
+	version string
 }
 
 // A value that a reference can bind to. This includes the variables, config and
@@ -269,6 +274,7 @@ func (b *Decl) newRefernce(variable string, loc *hcl.Range, accessor []ast.Prope
 
 type Resource struct {
 	token      string
+	version    string
 	defined    *ast.ResourcesMapEntry
 	definition *schema.Resource
 }
@@ -331,6 +337,7 @@ func (v *VariableMapEntry) ResolveType(d *Decl) schema.Type {
 
 type Invoke struct {
 	token      string
+	version    string
 	defined    *ast.InvokeExpr
 	definition *schema.Function
 }
@@ -364,7 +371,7 @@ func NewDecl(decl *ast.TemplateDecl) (*Decl, error) {
 		outputs:        map[string]ast.PropertyMapEntry{},
 		invokes:        map[*Invoke]struct{}{},
 		diags:          hcl.Diagnostics{},
-		loadedPackages: map[string]pkgCache{},
+		loadedPackages: map[pkgKey]pkgCache{},
 		lock:           &sync.RWMutex{},
 	}
 
@@ -564,6 +571,7 @@ func (d *Decl) bindInvoke(invoke *ast.InvokeExpr) error {
 	d.invokes[&Invoke{
 		token:   invoke.Token.Value,
 		defined: invoke,
+		version: invoke.CallOpts.Version.GetValue(),
 	}] = struct{}{}
 	return d.bind(invoke.Args())
 }
@@ -581,6 +589,7 @@ func (d *Decl) bindResource(r ast.ResourcesMapEntry) error {
 	}
 	res := Resource{
 		token:   r.Value.Type.Value,
+		version: r.Value.Options.Version.GetValue(),
 		defined: &r,
 	}
 	entries := map[string]bool{}
