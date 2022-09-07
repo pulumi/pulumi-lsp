@@ -12,6 +12,9 @@
 - [completion] Add support for completing `Fn::*`.
   [#48](https://github.com/pulumi/pulumi-lsp/pull/48)
 
+- [editors/vscode] Warn when Red Hat YAML is also installed.
+  [#52](https://github.com/pulumi/pulumi-lsp/pull/52)
+
 - [spec] Account for `Options.Version` when completing fields.
   [#51](https://github.com/pulumi/pulumi-lsp/pull/51)
 

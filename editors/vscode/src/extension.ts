@@ -2,7 +2,6 @@
 
 "use strict";
 
-import * as path from "path";
 import * as process from "process";
 import * as fs from "fs";
 
@@ -117,6 +116,62 @@ export async function activate(
   // Create the language client and start the client.
   client = new PulumiLSPClient(serverOptions);
   client.start();
+
+  // Ensure that we are not running at the same time as 'Red Hat YAML' without warning the
+  // user.
+  const shouldCheck = vscode.workspace.getConfiguration("pulumi-lsp").get(
+    "detectExtensionConflicts",
+  );
+  if (shouldCheck) {
+    let isDisplayed = false;
+    const interval = setInterval(function () {
+      const rhYaml = vscode.extensions.getExtension("redhat.vscode-yaml");
+      if (rhYaml && rhYaml.isActive && !isDisplayed) {
+        isDisplayed = true;
+        vscode.window
+          .showWarningMessage(
+            "You have both the Red Hat YAML extension and " +
+              "Pulumi YAML extension enabled. Red Hat YAML " +
+              "conflict with Pulumi YAML code completion.",
+            "Disable Red Hat YAML",
+            "Never show this warning",
+          )
+          .then((selection) => {
+            if (selection == "Disable Red Hat YAML") {
+              const promise = vscode.commands.executeCommand(
+                "workbench.extensions.uninstallExtension",
+                "redhat.vscode-yaml",
+              );
+              vscode.window.showInformationMessage(
+                "Red Hat YAML has been uninstalled in this workspace. " +
+                  "You will need to reload VSCode for this to take effect.",
+                "Restart Now",
+                "Restart Later",
+              ).then((selection) => {
+                isDisplayed = false;
+                if (selection == "Restart Now") {
+                  promise.then(() =>
+                    vscode.commands.executeCommand(
+                      "workbench.action.reloadWindow",
+                    )
+                  );
+                }
+              });
+            } else if (selection == "Never show this warning") {
+              vscode.workspace.getConfiguration("pulumi-lsp").update(
+                "detectExtensionConflicts",
+                false,
+                vscode.ConfigurationTarget.Global,
+              );
+              clearInterval(interval);
+              isDisplayed = false;
+            } else {
+              isDisplayed = false;
+            }
+          });
+      }
+    }, 5000);
+  }
 
   return client;
 }
