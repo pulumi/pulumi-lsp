@@ -47,9 +47,17 @@
                     "type": ["string", "null"],
                     "default": null,
                     "markdownDescription": "Specifies the path to the `pulumi-lsp` binary to use. Leave as `null` to use the binary bundled with the downloaded extension."
+                },
+                "pulumi-lsp.detectExtensionConflicts": {
+                    "type": ["boolean"],
+                    "default": true,
+                    "description": "Warn about conflicting extensions and suggest disabling them."
                 }
             }
         }
     },
-    "icon": "pulumi-logo.png"
+    "icon": "pulumi-logo.png",
+    "bugs": {
+        "url" : "https://github.com/pulumi/pulumi-lsp/issues"
+    }
 }
