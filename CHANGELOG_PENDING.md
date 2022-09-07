@@ -15,4 +15,10 @@
 - [editors/vscode] Warn when Red Hat YAML is also installed.
   [#52](https://github.com/pulumi/pulumi-lsp/pull/52)
 
+- [spec] Account for `Options.Version` when completing fields.
+  [#51](https://github.com/pulumi/pulumi-lsp/pull/51)
+
 ### Bug Fixes
+
+- [completion] Only complete when the cursor is on the text bieng completed.
+  [#51](https://github.com/pulumi/pulumi-lsp/pull/51)

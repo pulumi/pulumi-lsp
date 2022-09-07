@@ -3,10 +3,12 @@ package yaml
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"go.lsp.dev/protocol"
 
+	"github.com/blang/semver"
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
@@ -202,7 +204,40 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 	if err != nil {
 		return nil, err
 	}
+
+	// All completing types (`type:` and `Function:`) are of the form
+	// ${key}: ${Type}
+	// which means that if we see `pos` after the second object, we don't want to complete anymore
+	if endOfNthField(line, 2) < int(pos.Character) {
+		return nil, nil
+	}
+
 	line = strings.TrimSpace(line)
+
+	version := func() *semver.Version {
+		sibs, ok, err := siblingKeys(doc.text, pos)
+		if err == nil || !ok {
+			return nil
+		}
+		opts, ok := sibs["options"]
+		if !ok {
+			return nil
+		}
+		v, ok, err := getNestedKey(doc.text, opts, "version")
+		if !ok || err != nil {
+			return nil
+		}
+
+		s, err := extractVersionString(doc.text, v)
+		if err != nil {
+			return nil
+		}
+		version, err := semver.ParseTolerant(strings.TrimSpace(s))
+		if err != nil {
+			return nil
+		}
+		return &version
+	}
 
 	handleType := func(prefix string, resolve func(schema.PackageReference, string) []protocol.CompletionItem) (*protocol.CompletionList, error) {
 		if strings.HasPrefix(line, prefix) {
@@ -254,7 +289,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 						}},
 					}, nil
 				}
-				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], nil)
+				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], version())
 				if err != nil {
 					return nil, err
 				}
@@ -286,7 +321,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 					// There are no valid completions for this token
 					return nil, nil
 				}
-				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], nil)
+				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], version())
 				if err != nil {
 					return nil, err
 				}
@@ -426,8 +461,34 @@ func uniqueCompletions(existing []string,
 	return items
 }
 
+// Return the index of the end of the `n`th field in line.
+// If the `n`th field is not found, `math.MaxInt` is returned.
+func endOfNthField(line string, n int) int {
+	field := strings.Fields(line)
+	var idx int
+	if len(field) < n {
+		return math.MaxInt
+	}
+	for i := 0; i < n; i++ {
+		new := strings.Index(line, field[i]) + len(field[i])
+		idx = new + idx
+		line = line[new:]
+	}
+	return idx
+}
+
 // completeKey returns the completion list for a key at `params.Position`.
 func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
+	line, err := doc.text.Line(int(params.Position.Line))
+	if err != nil {
+		return nil, err
+	}
+
+	// The cursor is past key we are completing, so don't complete anything
+	if endOfNthField(line, 1) < int(params.Position.Character) {
+		return nil, nil
+	}
+
 	parents, indentation, ok, err := parentKeys(doc.text, params.Position)
 	parents = util.ReverseList(parents)
 	if err != nil {
@@ -497,7 +558,6 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 		}
 		line = strings.TrimSpace(line)
 
-		c.LogInfof("Completing for len(parent) = %d with line = %q", len(parents), line)
 		if len(parents) >= 2 && strings.HasPrefix(strings.ToLower(line), "fn::") {
 			return completeFnShorthand(c, line, len(parents)+1, postFix, s)
 		}
@@ -525,6 +585,7 @@ func builtinFunctions(postFix postFix) []option {
 
 // Complete `Fn::` into either a builtin function or a invoke.
 func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix postFix, s *server) (*protocol.CompletionList, error) {
+	c.LogWarningf("Calling Fn:: completion")
 	builtinFns := util.MapOver(builtinFunctions(postFix), func(o option) protocol.CompletionItem {
 		return protocol.CompletionItem{
 			CommitCharacters: []string{":"},
@@ -601,12 +662,13 @@ func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix pos
 					sortText = "9" + label
 				}
 				mods[tk[2]] = protocol.CompletionItem{
-					Label:      label,
-					InsertText: tk[2] + postFix.intoObject(indentLevel),
-					Kind:       protocol.CompletionItemKindFunction,
-					Deprecated: depreciated,
-					Detail:     f.Comment,
-					SortText:   sortText,
+					Label:          label,
+					InsertText:     tk[2] + postFix.intoObject(indentLevel),
+					InsertTextMode: protocol.InsertTextModeAsIs,
+					Kind:           protocol.CompletionItemKindFunction,
+					Deprecated:     depreciated,
+					Detail:         f.Comment,
+					SortText:       sortText,
 				}
 				continue
 			}
@@ -657,6 +719,7 @@ func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix pos
 				Label:            token,
 				CommitCharacters: []string{":"},
 				InsertText:       tk[2] + postFix.intoObject(indentLevel),
+				InsertTextMode:   protocol.InsertTextModeAsIs,
 				Kind:             protocol.CompletionItemKindFunction,
 				Deprecated:       depreciated,
 				Detail:           f.Comment,
@@ -843,12 +906,56 @@ func completeResourcePropertyKeys(
 	if err != nil {
 		return nil, err
 	}
-	resource, err := s.schemas.ResolveResource(c, typ)
+	var version string
+	if p, ok := sibs["options"]; ok {
+		v, ok, err := getNestedKey(doc.text, p, "version")
+		if err != nil {
+			return nil, err
+		} else if ok {
+			s, err := extractVersionString(doc.text, v)
+			if err != nil {
+				return nil, err
+			}
+			version = s
+		}
+	}
+	resource, err := s.schemas.ResolveResource(c, typ, version)
 	if err != nil || resource == nil {
 		return nil, err
 	}
 
 	return s.completeProperties(c, resource.InputProperties, util.MapKeys(existingProperties), postFix, 4)
+}
+
+// Walk a path of object keys, retrieving the position of the final key.
+func getNestedKey(text lsp.Document, pos protocol.Position, path ...string) (protocol.Position, bool, error) {
+	if len(path) == 0 {
+		return pos, true, nil
+	}
+	m, err := childKeys(text, pos)
+	if err != nil {
+		return protocol.Position{}, false, err
+	}
+	d, ok := m[path[0]]
+	if !ok {
+		return protocol.Position{}, false, nil
+	}
+	return getNestedKey(text, d, path[1:]...)
+}
+
+// Extract the version string from a line.
+//
+// If the string is empty, `"", nil` is a valid return value.
+func extractVersionString(text lsp.Document, pos protocol.Position) (string, error) {
+	line, err := text.Line(int(pos.Line))
+	if err != nil {
+		return "", err
+	}
+	parts := strings.SplitN(line, ":", 1)
+	if len(parts) > 1 {
+		return strings.TrimSpace(parts[1]), nil
+	}
+	return "", nil
 }
 
 func completeFunctionArgumentKeys(
@@ -870,7 +977,21 @@ func completeFunctionArgumentKeys(
 	if err != nil {
 		return nil, err
 	}
-	fn, err := s.schemas.ResolveFunction(c, typ)
+	var version string
+	if opts, ok := keys["option"]; ok {
+		v, ok, err := getNestedKey(doc.text, opts, "version")
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			s, err := extractVersionString(doc.text, v)
+			if err != nil {
+				return nil, err
+			}
+			version = s
+		}
+	}
+	fn, err := s.schemas.ResolveFunction(c, typ, version)
 	if err != nil || fn == nil || fn.Inputs == nil {
 		return nil, err
 	}
@@ -901,7 +1022,7 @@ func getTokenAtLine(text lsp.Document, line int) string {
 func (s *server) completeProperties(
 	c lsp.Client, inputs []*schema.Property, existing []string, postFix postFix, indentLevel int,
 ) (*protocol.CompletionList, error) {
-	props := make([]*schema.Property, len(inputs))
+	props := make([]*schema.Property, 0, len(inputs))
 	es := util.NewSet(util.MapOver(existing, strings.ToLower)...)
 	for _, p := range inputs {
 		if es.Has(strings.ToLower(p.Name)) {

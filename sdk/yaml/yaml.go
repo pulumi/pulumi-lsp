@@ -94,7 +94,6 @@ func (s *server) didClose(client lsp.Client, params *protocol.DidCloseTextDocume
 }
 
 func (s *server) didChange(client lsp.Client, params *protocol.DidChangeTextDocumentParams) error {
-	fileName := params.TextDocument.URI.Filename()
 	uri := params.TextDocument.URI
 	doc, ok := s.getDocument(params.TextDocument.URI)
 	if !ok {
@@ -105,10 +104,8 @@ func (s *server) didChange(client lsp.Client, params *protocol.DidChangeTextDocu
 		// the document.
 		return fmt.Errorf("Document might be unknown: %w", err)
 	}
-	var defRange protocol.Range
-	err := client.LogInfof("%s changed(wholeChange=%t)", fileName, params.ContentChanges[0].Range == defRange)
 	doc.process(client)
-	return err
+	return nil
 }
 
 func (s *server) hover(client lsp.Client, params *protocol.HoverParams) (*protocol.Hover, error) {

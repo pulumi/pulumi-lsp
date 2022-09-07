@@ -102,7 +102,7 @@ func NewDocumentAnalysisPipeline(c lsp.Client, text lsp.Document, loader schema.
 	}
 	go func(c lsp.Client, text lsp.Document, loader schema.ReferenceLoader) {
 		// We need to ensure everything finished when we exit
-		c.LogInfof("Kicking off analysis for %s", text.URI().Filename())
+		c.LogDebugf("Kicking off analysis for %s", text.URI().Filename())
 
 		d.parse(text)
 		step.After(d.parsed, func(util.Tuple[*ast.TemplateDecl, hcl.Diagnostics]) {
@@ -167,7 +167,7 @@ func (d *documentAnalysisPipeline) sendDiags(c lsp.Client, uri protocol.Document
 		}
 
 		lspDiags = append(lspDiags, diagnostic)
-		c.LogInfof("Preparing diagnostic %v", diagnostic)
+		c.LogDebugf("Preparing diagnostic %v", diagnostic)
 	}
 
 	// Diagnostics last until the next publish, so we need to publish even if we

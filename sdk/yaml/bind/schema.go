@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/blang/semver"
 	"github.com/hashicorp/hcl/v2"
 	yaml "github.com/pulumi/pulumi-yaml/pkg/pulumiyaml"
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
@@ -25,10 +26,10 @@ func (d *Decl) LoadSchema(loader schema.ReferenceLoader) {
 	defer d.lock.Unlock()
 	for invoke := range d.invokes {
 		typeLoc := invoke.defined.Token.Syntax().Syntax().Range()
-		pkgName := d.loadPackage(invoke.token, loader,
+		pkgName := d.loadPackage(invoke.token, invoke.version, loader,
 			invoke.defined.Token.Syntax().Syntax().Range())
 		if pkgName != "" {
-			pkg := d.loadedPackages[pkgName]
+			pkg := d.loadedPackages[pkgKey{pkgName, invoke.version}]
 			if pkg.diag != nil {
 				// We don't have a valid package, so give an appropriate warning to the user and move on
 				d.diags = d.diags.Extend(pkg.diag(typeLoc))
@@ -88,9 +89,9 @@ func (d *Decl) LoadSchema(loader schema.ReferenceLoader) {
 				continue
 			}
 			typeLoc := v.defined.Value.Type.Syntax().Syntax().Range()
-			pkgName := d.loadPackage(v.token, loader, typeLoc)
+			pkgName := d.loadPackage(v.token, v.version, loader, typeLoc)
 			if pkgName != "" {
-				pkg := d.loadedPackages[pkgName]
+				pkg := d.loadedPackages[pkgKey{pkgName, v.version}]
 				if pkg.diag != nil {
 					// We don't have a valid package, so give an appropriate warning to the user and move on
 					d.diags = d.diags.Extend(pkg.diag(typeLoc))
@@ -300,16 +301,25 @@ func (d *Decl) verifyPropertyAccess(expr PropertyAccessorList, typ schema.Type) 
 
 // Load a package into the cache if necessary. errRange is the location that
 // motivated loading the package (a type token in a invoke or a resource).
-func (d *Decl) loadPackage(tk string, loader schema.ReferenceLoader, errRange *hcl.Range) string {
+func (d *Decl) loadPackage(tk, version string, loader schema.ReferenceLoader, errRange *hcl.Range) string {
 	pkgName, err := pkgNameFromToken(tk)
 	if err != nil {
 		d.diags = append(d.diags, unparsableTokenDiag(tk, errRange, err))
 		return ""
 	}
 
-	_, ok := d.loadedPackages[pkgName]
+	key := pkgKey{pkgName, version}
+	_, ok := d.loadedPackages[key]
 	if !ok {
-		p, err := loader.LoadPackageReference(pkgName, nil)
+		var v *semver.Version
+		if version != "" {
+			version, err := semver.ParseTolerant(version)
+			if err != nil {
+				return ""
+			}
+			v = &version
+		}
+		p, err := loader.LoadPackageReference(pkgName, v)
 		var pkg pkgCache
 		if err != nil {
 			pkg = pkgCache{
@@ -320,7 +330,7 @@ func (d *Decl) loadPackage(tk string, loader schema.ReferenceLoader, errRange *h
 		} else {
 			pkg = newPkgCache(p)
 		}
-		d.loadedPackages[pkgName] = pkg
+		d.loadedPackages[key] = pkg
 	}
 	return pkgName
 }
