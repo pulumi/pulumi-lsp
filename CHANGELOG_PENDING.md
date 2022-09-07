@@ -12,4 +12,10 @@
 - [completion] Add support for completing `Fn::*`.
   [#48](https://github.com/pulumi/pulumi-lsp/pull/48)
 
+- [spec] Account for `Options.Version` when completing fields.
+  [#51](https://github.com/pulumi/pulumi-lsp/pull/51)
+
 ### Bug Fixes
+
+- [completion] Only complete when the cursor is on the text bieng completed.
+  [#51](https://github.com/pulumi/pulumi-lsp/pull/51)
