@@ -485,8 +485,7 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 	}
 
 	// The cursor is past key we are completing, so don't complete anything
-	// The `-1` is to accommodate the ending ":"
-	if endOfNthField(line, 1)-1 < int(params.Position.Character) {
+	if endOfNthField(line, 1) < int(params.Position.Character) {
 		return nil, nil
 	}
 
@@ -559,7 +558,6 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 		}
 		line = strings.TrimSpace(line)
 
-		c.LogInfof("Completing for len(parent) = %d with line = %q", len(parents), line)
 		if len(parents) >= 2 && strings.HasPrefix(strings.ToLower(line), "fn::") {
 			return completeFnShorthand(c, line, len(parents)+1, postFix, s)
 		}
@@ -587,6 +585,7 @@ func builtinFunctions(postFix postFix) []option {
 
 // Complete `Fn::` into either a builtin function or a invoke.
 func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix postFix, s *server) (*protocol.CompletionList, error) {
+	c.LogWarningf("Calling Fn:: completion")
 	builtinFns := util.MapOver(builtinFunctions(postFix), func(o option) protocol.CompletionItem {
 		return protocol.CompletionItem{
 			CommitCharacters: []string{":"},
@@ -663,12 +662,13 @@ func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix pos
 					sortText = "9" + label
 				}
 				mods[tk[2]] = protocol.CompletionItem{
-					Label:      label,
-					InsertText: tk[2] + postFix.intoObject(indentLevel),
-					Kind:       protocol.CompletionItemKindFunction,
-					Deprecated: depreciated,
-					Detail:     f.Comment,
-					SortText:   sortText,
+					Label:          label,
+					InsertText:     tk[2] + postFix.intoObject(indentLevel),
+					InsertTextMode: protocol.InsertTextModeAsIs,
+					Kind:           protocol.CompletionItemKindFunction,
+					Deprecated:     depreciated,
+					Detail:         f.Comment,
+					SortText:       sortText,
 				}
 				continue
 			}
@@ -719,6 +719,7 @@ func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix pos
 				Label:            token,
 				CommitCharacters: []string{":"},
 				InsertText:       tk[2] + postFix.intoObject(indentLevel),
+				InsertTextMode:   protocol.InsertTextModeAsIs,
 				Kind:             protocol.CompletionItemKindFunction,
 				Deprecated:       depreciated,
 				Detail:           f.Comment,
