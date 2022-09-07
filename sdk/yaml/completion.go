@@ -3,6 +3,7 @@ package yaml
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"go.lsp.dev/protocol"
@@ -205,15 +206,8 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 	// All completing types (`type:` and `Function:`) are of the form
 	// ${key}: ${Type}
 	// which means that if we see `pos` after the second object, we don't want to complete anymore
-	if fields := strings.Fields(line); len(fields) > 1 {
-		keyFieldEndIdx := strings.Index(line, fields[0]) + len(fields[0])
-		l := line[keyFieldEndIdx:]
-		typeFieldEndIdx := strings.Index(l, fields[1]) + len(fields[1]) + keyFieldEndIdx
-		if pos.Character > uint32(typeFieldEndIdx) {
-			client.LogWarningf("Examining fields %v for type completion: aborting with %d > %d",
-				fields, pos.Character, uint32(typeFieldEndIdx))
-			return nil, nil
-		}
+	if endOfNthField(line, 2) < int(pos.Character) {
+		return nil, nil
 	}
 
 	line = strings.TrimSpace(line)
@@ -472,8 +466,35 @@ func uniqueCompletions(existing []string,
 	return items
 }
 
+// Return the index of the end of the `n`th field in line.
+// If the `n`th field is not found, `math.MaxInt` is returned.
+func endOfNthField(line string, n int) int {
+	field := strings.Fields(line)
+	var idx int
+	if len(field) < n {
+		return math.MaxInt
+	}
+	for i := 0; i < n; i++ {
+		new := strings.Index(line, field[i]) + len(field[i])
+		idx = new + idx
+		line = line[new:]
+	}
+	return idx
+}
+
 // completeKey returns the completion list for a key at `params.Position`.
 func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
+	line, err := doc.text.Line(int(params.Position.Line))
+	if err != nil {
+		return nil, err
+	}
+
+	// The cursor is past key we are completing, so don't complete anything
+	// The `-1` is to accommodate the ending ":"
+	if endOfNthField(line, 1)-1 < int(params.Position.Character) {
+		return nil, nil
+	}
+
 	parents, indentation, ok, err := parentKeys(doc.text, params.Position)
 	parents = util.ReverseList(parents)
 	if err != nil {
