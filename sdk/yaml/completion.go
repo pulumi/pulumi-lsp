@@ -78,14 +78,16 @@ func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) 
 //   typePropertyCompletion(type({foo: string, bar: int}), "someType.") would
 //   complete to ["someType.foo", "someType.bar"].
 func (s *server) typePropertyCompletion(t schema.Type, filterPrefix string) (*protocol.CompletionList, error) {
+	var props []*schema.Property
 	switch t := codegen.UnwrapType(t).(type) {
 	case *schema.ResourceType:
-		return s.propertyListCompletion(util.ResourceProperties(t.Resource), filterPrefix)
+		props = util.ResourceProperties(t.Resource)
 	case *schema.ObjectType:
-		return s.propertyListCompletion(t.Properties, filterPrefix)
+		props = t.Properties
 	default:
 		return nil, nil
 	}
+	return s.propertyListCompletion(util.StripNils(props), filterPrefix)
 }
 
 // Returns the completion option for a property list. filterPrefix is pre-appended to the filter property of all results.
@@ -249,8 +251,28 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 			client.LogInfof("Completing %v", parts)
 			switch len(parts) {
 			case 1:
-				doPad := strings.TrimPrefix(line, prefix)
-				return s.pkgCompletionList(doPad == ""), nil
+				doPad := strings.TrimPrefix(line, prefix) == ""
+				return &protocol.CompletionList{
+					Items: s.pkgCompletionList(func(p schema.PackageReference) *protocol.CompletionItem {
+						hasResources := p.Resources().Range().Next()
+						if !hasResources {
+							return nil
+						}
+						insertText := p.Name() + ":"
+						if doPad {
+							insertText = " " + insertText
+						}
+						return &protocol.CompletionItem{
+							CommitCharacters: []string{":"},
+							Documentation:    p.Description(),
+							FilterText:       p.Name(),
+							InsertText:       insertText,
+							InsertTextFormat: protocol.InsertTextFormatPlainText,
+							InsertTextMode:   protocol.InsertTextModeAsIs,
+							Kind:             protocol.CompletionItemKindModule,
+							Label:            p.Name(),
+						}
+					})}, nil
 			case 2:
 
 				// "pulumi" is a special package with a single module: "providers"
@@ -322,39 +344,12 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 }
 
 // Return the list of currently loaded packages.
-func (s *server) pkgCompletionList(pad bool) *protocol.CompletionList {
+func (s *server) pkgCompletionList(getItem func(p schema.PackageReference) *protocol.CompletionItem) []protocol.CompletionItem {
 	s.schemas.m.Lock()
 	defer s.schemas.m.Unlock()
-	insertText := func(name string) string {
-		name = name + ":"
-		if pad {
-			name = " " + name
-		}
-		return name
-	}
-	return &protocol.CompletionList{
-		Items: append(util.MapOver(util.MapValues(s.schemas.cache), func(p schema.PackageReference) protocol.CompletionItem {
-			return protocol.CompletionItem{
-				CommitCharacters: []string{":"},
-				// TODO: Add back after https://github.com/pulumi/pulumi/pull/9800 merges
-				// Documentation:    p.Description(),
-				FilterText:       p.Name(),
-				InsertText:       insertText(p.Name()),
-				InsertTextFormat: protocol.InsertTextFormatPlainText,
-				InsertTextMode:   protocol.InsertTextModeAsIs,
-				Kind:             protocol.CompletionItemKindModule,
-				Label:            p.Name(),
-			}
-		}), protocol.CompletionItem{
-			CommitCharacters: []string{":"},
-			FilterText:       "pulumi",
-			InsertText:       insertText("pulumi"),
-			InsertTextFormat: protocol.InsertTextFormatPlainText,
-			InsertTextMode:   protocol.InsertTextModeAsIs,
-			Kind:             protocol.CompletionItemKindModule,
-			Label:            "pulumi",
-		}),
-	}
+	schemas := util.MapValues(s.schemas.cache)
+	schemas = append(schemas, schema.DefaultPulumiPackage.Reference())
+	return util.FilterMap(schemas, getItem)
 }
 
 // Return the completion list of modules for a given package.
@@ -455,7 +450,7 @@ func uniqueCompletions(existing []string,
 	items := []protocol.CompletionItem{}
 	e := util.NewSet(util.MapOver(existing, strings.ToLower)...)
 	for _, key := range keys {
-		if !e.Has(key.A) {
+		if !e.Has(strings.ToLower(key.A)) {
 			i := protocol.CompletionItem{
 				Label: key.A,
 			}
@@ -502,6 +497,24 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 		return nil, err
 	}
 	postFix := postFix{indentation}
+
+	matchesPath := func(path ...string) bool {
+		if len(parents) < len(path) {
+			return false
+		}
+		for i := 0; i < len(path); i++ {
+			cmp := strings.ToLower(parents[len(path)-1-i].B)
+			if cmp != path[i] {
+				return false
+			}
+		}
+		return true
+	}
+
+	providedCompletions := func(options []option) (*protocol.CompletionList, error) {
+		return providedCompletions(doc, parents[0].A, len(parents)+1, options)
+	}
+
 	switch {
 	case !ok: // We are at the top level
 		return completeTopLevelKeys(doc)
@@ -522,12 +535,197 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 		strings.ToLower(parents[2].B) == "resources":
 		return completeResourcePropertyKeys(c, doc, parents[0].A, s, postFix)
 
-	// The Arguments key in a function
-	case len(parents) > 3 &&
-		strings.ToLower(parents[0].B) == "arguments" &&
-		strings.ToLower(parents[1].B) == "fn::invoke":
+	// Arbitrarily nested completion items
+	case matchesPath("fn::invoke", "arguments"):
 		return completeFunctionArgumentKeys(c, doc, parents[1].A, parents[0].A, s, postFix, len(parents))
+	case matchesPath("fn::invoke"):
+		return providedCompletions([]option{
+			{"Function", "string", "The name of the function to invoke.", postFix.sameLine},
+			{"Arguments", "map<string, any>", "The arguments to the function.", postFix.intoObject},
+			{"Return", "string", "An index into the return value.", postFix.sameLine},
+			{"Options", "InvokeOptions", "Options to control the invoke.", postFix.intoObject},
+		})
+	case matchesPath("fn::invoke", "options"):
+		return providedCompletions([]option{
+			{"Parent", "Resource", "The parent resource of this invoke.", postFix.sameLine},
+			{"Provider", "Provider", "The explicit provider for this invoke.", postFix.sameLine},
+			{"Version", "string", "The provider version to use for this invoke.", postFix.sameLine},
+			{"PluginDownloadURL", "string", "The provider plugin download URL to use for this invoke.", postFix.sameLine},
+		})
+	default:
+		line, err := doc.text.Line(int(params.Position.Line))
+		if err != nil {
+			return nil, err
+		}
+		line = strings.TrimSpace(line)
 
+		c.LogInfof("Completing for len(parent) = %d with line = %q", len(parents), line)
+		if len(parents) >= 2 && strings.HasPrefix(strings.ToLower(line), "fn::") {
+			return completeFnShorthand(c, line, len(parents)+1, postFix, s)
+		}
+		return nil, nil
+	}
+}
+
+func builtinFunctions(postFix postFix) []option {
+	return []option{
+		{"Join", "", "Join a list of strings together.", postFix.intoList},
+		{"Split", "", "Split a string into a list.", postFix.intoList},
+		{"ToJSON", "", "Encode a value into a string as JSON.", postFix.intoList},
+		{"Select", "", "Select an element from a list by index.", postFix.intoList},
+		{"ToBase64", "", "Encode a string with base64", postFix.intoList},
+		{"FileAsset", "", "Create an Asset from a file path.", postFix.sameLine},
+		{"StringAsset", "", "Create an Asset from a string.", postFix.sameLine},
+		{"RemoteAsset", "", "Create an Asset from a remote URL.", postFix.sameLine},
+		{"FileArchive", "", "Create an Archive from a file path.", postFix.sameLine},
+		{"RemoteArchive", "", "Create an Archive from a remote URL", postFix.sameLine},
+		{"AssetArchive", "", "Create an Archive from a map of Assets or Archives.", postFix.intoObject},
+		{"Secret", "", "Make a value secret", postFix.sameLine},
+		{"ReadFile", "", "Read a file into a string.", postFix.sameLine},
+	}
+}
+
+// Complete `Fn::` into either a builtin function or a invoke.
+func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix postFix, s *server) (*protocol.CompletionList, error) {
+	builtinFns := util.MapOver(builtinFunctions(postFix), func(o option) protocol.CompletionItem {
+		return protocol.CompletionItem{
+			CommitCharacters: []string{":"},
+			Detail:           o.typ,
+			Documentation:    o.detail,
+			InsertText:       "Fn::" + o.label + o.post(indentLevel),
+			InsertTextMode:   protocol.InsertTextModeAsIs,
+			Kind:             protocol.CompletionItemKindFunction,
+			Label:            o.label,
+			SortText:         "2" + o.label,
+			FilterText:       "Fn::" + o.label,
+		}
+	})
+	parts := strings.Split(strings.TrimPrefix(strings.ToLower(line), "fn::"), ":")
+	c.LogInfof("Completing for Fn for %v", parts)
+	switch len(parts) {
+	case 1:
+		// Complete either builtins or packages
+		lst := s.pkgCompletionList(func(p schema.PackageReference) *protocol.CompletionItem {
+			hasFunctions := p.Functions().Range().Next()
+			if !hasFunctions {
+				return nil
+			}
+			return &protocol.CompletionItem{
+				CommitCharacters: []string{":"},
+				Documentation:    p.Description(),
+				InsertText:       p.Name() + ":",
+				Kind:             protocol.CompletionItemKindModule,
+				Label:            p.Name(),
+				FilterText:       "Fn::" + p.Name(),
+				SortText:         "1" + p.Name(),
+			}
+		})
+		return &protocol.CompletionList{Items: append(lst, builtinFns...)}, nil
+	case 2:
+		// Here we are completing only modules or top level invokes
+		for _, b := range builtinFunctions(postFix) {
+			if strings.ToLower(b.label) == parts[0] {
+				c.LogInfof("Not loading the package for a builtin function: %s", b.label)
+				return nil, nil
+			}
+		}
+		pkg, err := s.schemas.Loader(c).LoadPackageReference(parts[0], nil)
+		if err != nil {
+			return nil, err
+		}
+		mods := map[string]protocol.CompletionItem{}
+		for iter := pkg.Functions().Range(); iter.Next(); {
+			token := iter.Token()
+			tk := strings.Split(token, ":")
+			if len(tk) < 3 {
+				continue
+			}
+			if _, ok := mods[tk[1]]; ok {
+				continue
+			}
+
+			mod := token[0 : len(tk[1])+len(tk[0])+1]
+			// Converting pkg:mod/name:name to pkg:mod:name
+			if m := strings.Split(tk[1], "/"); len(m) == 2 && m[1] == tk[2] {
+				mod = m[0]
+			}
+
+			// Getting top level functions
+			if mod == "index" || mod == "" {
+				f, err := iter.Function()
+				if err != nil {
+					continue
+				}
+				label := tk[0] + ":" + tk[2]
+				depreciated := f.DeprecationMessage != ""
+				sortText := "1" + label
+				if depreciated {
+					sortText = "9" + label
+				}
+				mods[tk[2]] = protocol.CompletionItem{
+					Label:      label,
+					InsertText: tk[2] + postFix.intoObject(indentLevel),
+					Kind:       protocol.CompletionItemKindFunction,
+					Deprecated: depreciated,
+					Detail:     f.Comment,
+					SortText:   sortText,
+				}
+				continue
+			}
+
+			// Modules
+			mods[tk[1]] = protocol.CompletionItem{
+				Label:            mod,
+				CommitCharacters: []string{":"},
+				InsertText:       mod + ":",
+				Kind:             protocol.CompletionItemKindModule,
+				SortText:         "2" + mod,
+			}
+		}
+		return &protocol.CompletionList{Items: util.MapValues(mods)}, nil
+
+	case 3:
+		// Here we are completing only invokes in specific modules
+		pkg, err := s.schemas.Loader(c).LoadPackageReference(parts[0], nil)
+		if err != nil {
+			return nil, err
+		}
+		fns := []protocol.CompletionItem{}
+		for iter := pkg.Functions().Range(); iter.Next(); {
+			token := iter.Token()
+			tk := strings.Split(token, ":")
+			if len(tk) != 3 {
+				continue
+			}
+			mod := token[0 : len(tk[1])+len(tk[0])+1]
+			// Converting pkg:mod/name:name to pkg:mod:name
+			if m := strings.Split(tk[1], "/"); len(m) == 2 && m[1] == tk[2] {
+				mod = m[0]
+			}
+			if mod != parts[1] {
+				continue
+			}
+			token = tk[0] + ":" + mod + ":" + tk[2]
+			f, err := iter.Function()
+			if err != nil {
+				return nil, err
+			}
+			depreciated := f.DeprecationMessage != ""
+			sortText := "1" + token
+			if depreciated {
+				sortText = "9" + token
+			}
+			fns = append(fns, protocol.CompletionItem{
+				Label:            token,
+				CommitCharacters: []string{":"},
+				InsertText:       tk[2] + postFix.intoObject(indentLevel),
+				Kind:             protocol.CompletionItemKindFunction,
+				Deprecated:       depreciated,
+				Detail:           f.Comment,
+				SortText:         sortText,
+			})
+		}
+		return &protocol.CompletionList{Items: fns}, nil
 	default:
 		return nil, nil
 	}
@@ -563,7 +761,16 @@ func completeTopLevelKeys(doc *document) (*protocol.CompletionList, error) {
 	}, nil
 }
 
-func completeResourceOptionsKeys(doc *document, keyPos protocol.Position, post postFix) (*protocol.CompletionList, error) {
+type option struct {
+	label  string
+	typ    string
+	detail string
+	post   func(int) string
+}
+
+func providedCompletions(
+	doc *document, keyPos protocol.Position, indentLevel int, options []option,
+) (*protocol.CompletionList, error) {
 	sibs, err := childKeys(doc.text, keyPos)
 	if err != nil {
 		return nil, err
@@ -571,15 +778,16 @@ func completeResourceOptionsKeys(doc *document, keyPos protocol.Position, post p
 	setDetails := func(detail, doc string, post func(int) string) func(*protocol.CompletionItem) {
 		return func(c *protocol.CompletionItem) {
 			c.Detail = detail
-			// We are indenting to the forth level
-			// resources:
-			//   name:
-			//     options:
-			//       what we are suggestion
-			c.InsertText = c.Label + post(4)
+			c.InsertText = c.Label + post(indentLevel)
 			c.Documentation = doc
 			c.InsertTextMode = protocol.InsertTextModeAsIs
 		}
+	}
+
+	items := make([]util.Tuple[string, func(*protocol.CompletionItem)], len(options))
+	for i, option := range options {
+		items[i].A = option.label
+		items[i].B = setDetails(option.typ, option.detail, option.post)
 	}
 
 	return &protocol.CompletionList{
@@ -591,59 +799,41 @@ func completeResourceOptionsKeys(doc *document, keyPos protocol.Position, post p
 				s = parts[0]
 			}
 			return s
-		}), []util.Tuple[string, func(*protocol.CompletionItem)]{
-			{A: "additionalSecretOutputs",
-				B: setDetails("List<String>",
-					"AdditionalSecretOutputs specifies properties that must be encrypted as secrets",
-					post.intoList)},
-			{A: "aliases",
-				B: setDetails("List<String>",
-					"Aliases specifies names that this resource used to be have so that renaming or refactoring doesn’t replace it",
-					post.intoList)},
-			{A: "customTimeouts",
-				B: setDetails("CustomTimeout",
-					"CustomTimeouts overrides the default retry/timeout behavior for resource provisioning",
-					post.intoObject)},
-			{A: "deleteBeforeReplace",
-				B: setDetails("Boolean",
-					"DeleteBeforeReplace overrides the default create-before-delete behavior when replacing",
-					post.sameLine)},
-			{A: "dependsOn",
-				B: setDetails("List<Expression>",
-					"DependsOn makes this resource explicitly depend on another resource, by name, so that it won't be created before the "+
-						"dependent finishes being created (and the reverse for destruction). Normally, Pulumi automatically tracks implicit"+
-						" dependencies through inputs/outputs, but this can be used when dependencies aren't captured purely from input/output edges.",
-					post.intoList)},
-			{A: "ignoreChanges",
-				B: setDetails("List<String>",
-					"IgnoreChanges declares that changes to certain properties should be ignored during diffing",
-					post.intoList)},
-			{A: "import",
-				B: setDetails("String",
-					"Import adopts an existing resource from your cloud account under the control of Pulumi",
-					post.sameLine)},
-			{A: "parent",
-				B: setDetails("Resource",
-					"Parent specifies a parent for the resource",
-					post.sameLine)},
-			{A: "protect",
-				B: setDetails("Boolean",
-					"Protect prevents accidental deletion of a resource",
-					post.sameLine)},
-			{A: "provider",
-				B: setDetails("Provider Resource",
-					"Provider specifies an explicitly configured provider, instead of using the default global provider",
-					post.sameLine)},
-			{A: "providers",
-				B: setDetails("Map<Provider Resource>",
-					"Map of providers for a resource and its children.",
-					post.intoObject)},
-			{A: "version",
-				B: setDetails("String",
-					"Version specifies a provider plugin version that should be used when operating on a resource",
-					post.sameLine)},
-		}),
+		}), items),
 	}, nil
+
+}
+
+func completeResourceOptionsKeys(doc *document, keyPos protocol.Position, post postFix) (*protocol.CompletionList, error) {
+	return providedCompletions(doc, keyPos, 4, []option{
+		{"additionalSecretOutputs", "List<String>",
+			"AdditionalSecretOutputs specifies properties that must be encrypted as secrets", post.intoList},
+		{"aliases", "List<String>",
+			"Aliases specifies names that this resource used to be have so that renaming or refactoring doesn’t replace it", post.intoList},
+		{"customTimeouts", "CustomTimeout",
+			"CustomTimeouts overrides the default retry/timeout behavior for resource provisioning", post.intoObject},
+		{"deleteBeforeReplace", "Boolean",
+			"DeleteBeforeReplace overrides the default create-before-delete behavior when replacing", post.sameLine},
+		{"dependsOn", "List<Expression>",
+			"DependsOn makes this resource explicitly depend on another resource, by name, so that it won't be created before the " +
+				"dependent finishes being created (and the reverse for destruction). Normally, Pulumi automatically tracks implicit" +
+				" dependencies through inputs/outputs, but this can be used when dependencies aren't captured purely from input/output edges.",
+			post.intoList},
+		{"ignoreChanges", "List<String>",
+			"IgnoreChanges declares that changes to certain properties should be ignored during diffing", post.intoList},
+		{"import", "String",
+			"Import adopts an existing resource from your cloud account under the control of Pulumi", post.sameLine},
+		{"parent", "Resource",
+			"Parent specifies a parent for the resource", post.sameLine},
+		{"protect", "Boolean",
+			"Protect prevents accidental deletion of a resource", post.sameLine},
+		{"provider", "Provider Resource",
+			"Provider specifies an explicitly configured provider, instead of using the default global provider", post.sameLine},
+		{"providers", "Map<Provider Resource>",
+			"Map of providers for a resource and its children.", post.intoObject},
+		{"version", "String",
+			"Version specifies a provider plugin version that should be used when operating on a resource", post.sameLine},
+	})
 }
 
 func completeResourceKeys(doc *document, keyPos protocol.Position, postFix postFix) (*protocol.CompletionList, error) {
@@ -840,6 +1030,7 @@ func (s *server) completeProperties(
 		contract.Assertf(p != nil, "nil properties are not allowed")
 		props = append(props, p)
 	}
+	props = util.StripNils(props)
 	completions, err := s.propertyListCompletion(props, "")
 	if err != nil {
 		return nil, err

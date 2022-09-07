@@ -531,6 +531,11 @@ func (b *Decl) bind(e ast.Expr) error {
 	case *ast.RemoteAssetExpr:
 	case *ast.StringAssetExpr:
 
+	case *ast.ReadFileExpr:
+		return b.bind(e.Path)
+	case *ast.SecretExpr:
+		return b.bind(e.Value)
+
 	// Stack reference
 	case *ast.StackReferenceExpr:
 
