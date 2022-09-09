@@ -1,63 +1,68 @@
 {
-    "name": "pulumi-lsp-client",
-    "displayName": "Pulumi YAML",
-    "description": "IntelliSense and Linting for Pulumi YAML in VSCode",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/pulumi/pulumi-lsp"
-    },
-    "homepage": "https://github.com/pulumi/pulumi-lsp/blob/main/README.md",
-    "publisher": "pulumi",
-    "author": "iwahbe",
-    "license": "MIT",
-    "version": "0.0.1",
-    "categories": [
-      "Programming Languages",
-      "Snippets",
-      "Linters"
-    ],
-    "engines": {
-        "vscode": "^1.63.0"
-    },
-    "dependencies": {
-        "vscode-languageclient": "^7.0.0"
-    },
-    "activationEvents": [
-        "workspaceContains:**/Pulumi.yaml",
-        "workspaceContains:**/Main.yaml"
-    ],
-    "main": "out/main.js",
-    "devDependencies": {
-        "@types/node": "^14.18.12",
-        "@types/vscode": "^1.63.0",
-        "esbuild": "^0.14.43",
-        "typescript": "^4.6.2"
-    },
-    "scripts": {
-        "vscode:prepublish": "npm run esbuild-base -- --minify",
-        "esbuild-base": "npm exec esbuild -- ./src/extension.ts --bundle --outfile=out/main.js --external:vscode --format=cjs --platform=node",
-        "esbuild": "npm run esbuild-base -- --sourcemap",
-        "test-compile": "tsc -p ./"
-    },
-    "contributes": {
-        "configuration": {
-            "title": "Pulumi LSP",
-            "properties": {
-                "pulumi-lsp.server.path": {
-                    "type": ["string", "null"],
-                    "default": null,
-                    "markdownDescription": "Specifies the path to the `pulumi-lsp` binary to use. Leave as `null` to use the binary bundled with the downloaded extension."
-                },
-                "pulumi-lsp.detectExtensionConflicts": {
-                    "type": ["boolean"],
-                    "default": true,
-                    "description": "Warn about conflicting extensions and suggest disabling them."
-                }
-            }
+  "name": "pulumi-lsp-client",
+  "displayName": "Pulumi YAML",
+  "description": "IntelliSense and Linting for Pulumi YAML in VSCode",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pulumi/pulumi-lsp"
+  },
+  "homepage": "https://github.com/pulumi/pulumi-lsp/blob/main/README.md",
+  "publisher": "pulumi",
+  "author": "iwahbe",
+  "license": "MIT",
+  "version": "0.0.1",
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Linters"
+  ],
+  "engines": {
+    "vscode": "^1.63.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^7.0.0"
+  },
+  "activationEvents": [
+    "workspaceContains:**/Pulumi.yaml",
+    "workspaceContains:**/Main.yaml"
+  ],
+  "main": "out/main.js",
+  "devDependencies": {
+    "@types/node": "^14.18.12",
+    "@types/vscode": "^1.63.0",
+    "esbuild": "^0.14.43",
+    "typescript": "^4.6.2"
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "esbuild-base": "npm exec esbuild -- ./src/extension.ts --bundle --outfile=out/main.js --external:vscode --format=cjs --platform=node",
+    "esbuild": "npm run esbuild-base -- --sourcemap",
+    "test-compile": "tsc -p ./"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Pulumi LSP",
+      "properties": {
+        "pulumi-lsp.server.path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "markdownDescription": "Specifies the path to the `pulumi-lsp` binary to use. Leave as `null` to use the binary bundled with the downloaded extension."
+        },
+        "pulumi-lsp.detectExtensionConflicts": {
+          "type": [
+            "boolean"
+          ],
+          "default": true,
+          "description": "Warn about conflicting extensions and suggest disabling them."
         }
-    },
-    "icon": "pulumi-logo.png",
-    "bugs": {
-        "url" : "https://github.com/pulumi/pulumi-lsp/issues"
+      }
     }
+  },
+  "icon": "pulumi-logo.png",
+  "bugs": {
+    "url": "https://github.com/pulumi/pulumi-lsp/issues"
+  }
 }
