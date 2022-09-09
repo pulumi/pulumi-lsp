@@ -98,6 +98,7 @@ jobs:
           cp LICENSE editors/vscode/LICENSE
           cp README.md editors/vscode/README.md
           cat editors/vscode/package.json | jq ".version=\"$(git describe --tags --match 'v*.*.*')\"" > editors/vscode/package.json
+          chmod u+x ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/*
           mv ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/* editors/vscode/
       - name: Package (Prereleas)
         if: inputs.vsce-pre-release
