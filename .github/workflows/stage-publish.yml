@@ -93,7 +93,11 @@ jobs:
           mkdir bin
           cp LICENSE editors/vscode/LICENSE
           cp README.md editors/vscode/README.md
-          VERSION=$(git describe --tags --match 'v*.*.*')
+          VERSION=$(git describe --tags --match 'v*.*.*' | sed 's/-.*//')
+          if "${{inputs.vsce-full-release}}" == false; then
+            # Ensure that the version is unique
+            VERSION="${VERSION}$(date '+%Y%m%d%s')
+          fi
           VERSION=${VERSION#v}
           jq ".version=\"${VERSION%-*}\"" editors/vscode/package.json > tmp.json
           mv tmp.json editors/vscode/package.json
