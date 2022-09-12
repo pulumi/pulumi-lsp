@@ -101,6 +101,7 @@ jobs:
             echo " '${VERSION}'"
           else
             VERSION=$(git tag --list 'v*.*.*' | tail -1)
+            VERSION=${VERSION#v}
             echo "Setting release version: '${VERSION}'"
           fi
           jq ".version=\"${VERSION}\"" editors/vscode/package.json > tmp.json
