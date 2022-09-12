@@ -93,8 +93,7 @@ jobs:
           mkdir bin
           cp LICENSE editors/vscode/LICENSE
           cp README.md editors/vscode/README.md
-          git fetch --tags
-          VERSION=$(git describe --tags --match 'v*.*.*' main | sed 's/\-.*//')
+          VERSION=$(./scripts/next-release.sh)
           if [[ "${VERSION}" == "" ]]; then
             echo "Empty version"
             exit 1
