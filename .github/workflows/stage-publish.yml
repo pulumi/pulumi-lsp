@@ -98,9 +98,12 @@ jobs:
             # Ensure that the version is unique
             VERSION="${VERSION}$(date '+%Y%m%d%s')"
           fi
-          VERSION=${VERSION#v}
-          jq ".version=\"${VERSION%-*}\"" editors/vscode/package.json > tmp.json
+          echo "VERSION = '${VERSION#v}'"
+          jq ".version=\"${VERSION#v}\"" editors/vscode/package.json > tmp.json
           mv tmp.json editors/vscode/package.json
+          echo ::group::package.json
+          cat editors/vscode/package.json
+          echo ::endgroup::
           chmod u+x ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/*
           mv ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/* editors/vscode/
       - name: Package (Prereleas)
