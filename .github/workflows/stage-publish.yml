@@ -97,7 +97,7 @@ jobs:
           if [[ "${{inputs.vsce-full-release}}" == "false" ]]; then
             VERSION=$(./scripts/next-release.sh)
             echo -n "Setting unique version for pre-release: '${VERSION}' ->"
-            VERSION="${VERSION%0}$(date '+%Y%m%d%s')"
+            VERSION="${VERSION%0}$(date '+%Y%m%d%S')"
             echo " '${VERSION}'"
           else
             VERSION=$(git describe --match 'v*.*.*')
