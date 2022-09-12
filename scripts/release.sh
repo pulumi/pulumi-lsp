@@ -68,6 +68,8 @@ case "$1" in
         ;;
 
     tag)
+        git fetch origin master
+
         git tag "$VERSION" origin/main~1
         git push origin "$VERSION"
         ;;
