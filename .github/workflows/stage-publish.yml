@@ -93,10 +93,11 @@ jobs:
           mkdir bin
           cp LICENSE editors/vscode/LICENSE
           cp README.md editors/vscode/README.md
-          VERSION=$(git describe --tags --match 'v*.*.*' | sed 's/-.*//')
-          if "${{inputs.vsce-full-release}}" == false; then
-            # Ensure that the version is unique
+          VERSION=$(git describe --tags --match 'v*.*.*' | sed 's/\-.*//')
+          if [[ "${{inputs.vsce-full-release}}" == "false" ]]; then
+            echo -n "Setting unique version for pre-release: ${VERSION} ->"
             VERSION="${VERSION}$(date '+%Y%m%d%s')"
+            echo " ${VERSION}"
           fi
           echo "VERSION = '${VERSION#v}'"
           jq ".version=\"${VERSION#v}\"" editors/vscode/package.json > tmp.json
@@ -106,7 +107,7 @@ jobs:
           echo ::endgroup::
           chmod u+x ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/*
           mv ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/* editors/vscode/
-      - name: Package (Prereleas)
+      - name: Package (Pre-Release)
         if: ${{! inputs.vsce-full-release}}
         run: |
           cd editors/vscode
