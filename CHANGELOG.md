@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v0.2.1 (2022-09-12)
+
+### Improvements
+
+### Bug Fixes
+
 ## v0.2.0 (2022-09-12)
 
 ### Improvements
