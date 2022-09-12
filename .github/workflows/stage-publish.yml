@@ -94,7 +94,7 @@ jobs:
           cp LICENSE editors/vscode/LICENSE
           cp README.md editors/vscode/README.md
           git fetch --tags
-          VERSION=$(git describe --tags --match 'v*.*.*' | sed 's/\-.*//')
+          VERSION=$(git describe --tags --match 'v*.*.*' main | sed 's/\-.*//')
           if [[ "${VERSION}" == "" ]]; then
             echo "Empty version"
             exit 1
