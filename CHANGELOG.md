@@ -6,6 +6,8 @@
 
 ### Bug Fixes
 
+- Fixed problems with the release process.
+
 ## v0.2.0 (2022-09-12)
 
 ### Improvements
