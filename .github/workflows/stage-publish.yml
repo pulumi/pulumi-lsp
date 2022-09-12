@@ -93,14 +93,21 @@ jobs:
           mkdir bin
           cp LICENSE editors/vscode/LICENSE
           cp README.md editors/vscode/README.md
+          git fetch --tags
           VERSION=$(git describe --tags --match 'v*.*.*' | sed 's/\-.*//')
-          if [[ "${{inputs.vsce-full-release}}" == "false" ]]; then
-            echo -n "Setting unique version for pre-release: ${VERSION} ->"
-            VERSION="${VERSION}$(date '+%Y%m%d%s')"
-            echo " ${VERSION}"
+          if [[ "${VERSION}" == "" ]]; then
+            echo "Empty version"
+            exit 1
           fi
-          echo "VERSION = '${VERSION#v}'"
-          jq ".version=\"${VERSION#v}\"" editors/vscode/package.json > tmp.json
+          VERSION=${VERSION#v}
+          if [[ "${{inputs.vsce-full-release}}" == "false" ]]; then
+            echo -n "Setting unique version for pre-release: '${VERSION}' ->"
+            VERSION="${VERSION}$(date '+%Y%m%d%s')"
+            echo " '${VERSION}'"
+          else
+            echo "Setting release version: '${VERSION}'"
+          fi
+          jq ".version=\"${VERSION}\"" editors/vscode/package.json > tmp.json
           mv tmp.json editors/vscode/package.json
           echo ::group::package.json
           cat editors/vscode/package.json
