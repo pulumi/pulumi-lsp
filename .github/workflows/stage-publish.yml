@@ -104,12 +104,12 @@ jobs:
           chmod u+x ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/*
           mv ${{steps.download.outputs.download-path}}/pulumi-lsp_${{matrix.file}}/* editors/vscode/
       - name: Package (Prereleas)
-        if: ! ${{inputs.vsce-full-release}}
+        if: ${{! inputs.vsce-full-release}}
         run: |
           cd editors/vscode
           npm exec vsce -- package --pre-release --target "${{ matrix.platform }}-${{ matrix.arch }}" --out ../../bin/
       - name: Publish (Pre-Release)
-        if: ! ${{inputs.vsce-full-release}}
+        if: ${{! inputs.vsce-full-release}}
         run: |
           npm exec vsce -- publish --pre-release --packagePath bin/*.vsix
       - name: Package (Release)
