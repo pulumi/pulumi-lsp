@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage()
 {
-    echo "Usage: ./scripts/release.sh VERSION"
+    echo "Usage: ./scripts/release.sh ACTION VERSION"
     echo ""
     echo "Automates release-related chores"
     echo ""
@@ -48,7 +48,7 @@ restore_changelog_pending()
 case "$1" in
     start)
         git fetch origin main
-        git main -b release/$VERSION
+        git checkout main -b release/$VERSION
 
         merge_changelogs
         git add CHANGELOG.md
@@ -59,8 +59,12 @@ case "$1" in
         git commit -m "Cleanup for ${VERSION} release"
 
         git push --set-upstream origin release/${VERSION}
+        echo ""
         echo "Merge the newly created release/${VERSION} branch and run $0 tag ${VERSION}"
         echo "Make sure to use 'Rebase and merge' option to preserve the commit sequence."
+        echo ""
+        echo "After release/${VERSION} is merged, run"
+        echo "$ $0 tag $VERSION"
         ;;
 
     tag)
@@ -69,7 +73,7 @@ case "$1" in
         ;;
 
     *)
-        echo "Invalid command: $0. Expecting one of: start, tag"
+        echo "Invalid command: $1. Expecting one of: start, tag"
         usage
         exit 1
         ;;
