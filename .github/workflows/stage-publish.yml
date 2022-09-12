@@ -96,7 +96,7 @@ jobs:
           VERSION=$(git describe --tags --match 'v*.*.*' | sed 's/-.*//')
           if "${{inputs.vsce-full-release}}" == false; then
             # Ensure that the version is unique
-            VERSION="${VERSION}$(date '+%Y%m%d%s')
+            VERSION="${VERSION}$(date '+%Y%m%d%s')"
           fi
           VERSION=${VERSION#v}
           jq ".version=\"${VERSION%-*}\"" editors/vscode/package.json > tmp.json
