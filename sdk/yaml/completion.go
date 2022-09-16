@@ -495,7 +495,7 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 		c.LogDebugf("Could not find enclosing (ok=%t) (err=%v)", ok, err)
 		return nil, err
 	}
-	postFix := postFix{indentation}
+	post := postFix{indentation}
 
 	matchesPath := func(path ...string) bool {
 		if len(parents) < len(path) {
@@ -516,40 +516,41 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 
 	switch {
 	case !ok: // We are at the top level
-		return completeTopLevelKeys(doc)
+		// NOTE We assume that we are completing to 2 spaces
+		return completeTopLevelKeys(doc, postFix{2})
 
 	// Completing for the ResourceOptions decl
 	case len(parents) == 3 &&
 		strings.ToLower(parents[0].B) == "options" &&
 		strings.ToLower(parents[2].B) == "resources":
-		return completeResourceOptionsKeys(doc, parents[0].A, postFix)
+		return completeResourceOptionsKeys(doc, parents[0].A, post)
 
 	// Completing for the Resource decl
 	case len(parents) == 2 && strings.ToLower(parents[1].B) == "resources":
-		return completeResourceKeys(doc, parents[0].A, postFix)
+		return completeResourceKeys(doc, parents[0].A, post)
 
 	// The properties key in a resource
 	case len(parents) == 3 &&
 		strings.ToLower(parents[0].B) == "properties" &&
 		strings.ToLower(parents[2].B) == "resources":
-		return completeResourcePropertyKeys(c, doc, parents[0].A, s, postFix)
+		return completeResourcePropertyKeys(c, doc, parents[0].A, s, post)
 
 	// Arbitrarily nested completion items
 	case matchesPath("fn::invoke", "arguments"):
-		return completeFunctionArgumentKeys(c, doc, parents[1].A, parents[0].A, s, postFix, len(parents))
+		return completeFunctionArgumentKeys(c, doc, parents[1].A, parents[0].A, s, post, len(parents))
 	case matchesPath("fn::invoke"):
 		return providedCompletions([]option{
-			{"Function", "string", "The name of the function to invoke.", postFix.sameLine},
-			{"Arguments", "map<string, any>", "The arguments to the function.", postFix.intoObject},
-			{"Return", "string", "An index into the return value.", postFix.sameLine},
-			{"Options", "InvokeOptions", "Options to control the invoke.", postFix.intoObject},
+			{"Function", "string", "The name of the function to invoke.", post.sameLine},
+			{"Arguments", "map<string, any>", "The arguments to the function.", post.intoObject},
+			{"Return", "string", "An index into the return value.", post.sameLine},
+			{"Options", "InvokeOptions", "Options to control the invoke.", post.intoObject},
 		})
 	case matchesPath("fn::invoke", "options"):
 		return providedCompletions([]option{
-			{"Parent", "Resource", "The parent resource of this invoke.", postFix.sameLine},
-			{"Provider", "Provider", "The explicit provider for this invoke.", postFix.sameLine},
-			{"Version", "string", "The provider version to use for this invoke.", postFix.sameLine},
-			{"PluginDownloadURL", "string", "The provider plugin download URL to use for this invoke.", postFix.sameLine},
+			{"Parent", "Resource", "The parent resource of this invoke.", post.sameLine},
+			{"Provider", "Provider", "The explicit provider for this invoke.", post.sameLine},
+			{"Version", "string", "The provider version to use for this invoke.", post.sameLine},
+			{"PluginDownloadURL", "string", "The provider plugin download URL to use for this invoke.", post.sameLine},
 		})
 	default:
 		line, err := doc.text.Line(int(params.Position.Line))
@@ -559,7 +560,7 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 		line = strings.TrimSpace(line)
 
 		if len(parents) >= 2 && strings.HasPrefix(strings.ToLower(line), "fn::") {
-			return completeFnShorthand(c, line, len(parents)+1, postFix, s)
+			return completeFnShorthand(c, line, len(parents)+1, post, s)
 		}
 		return nil, nil
 	}
@@ -732,16 +733,17 @@ func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix pos
 	}
 }
 
-func completeTopLevelKeys(doc *document) (*protocol.CompletionList, error) {
+func completeTopLevelKeys(doc *document, postFix postFix) (*protocol.CompletionList, error) {
 	sibs, err := topLevelKeys(doc.text)
 	if err != nil {
 		return nil, err
 	}
-	setDetails := func(detail string) func(*protocol.CompletionItem) {
+	setDetails := func(detail string, post func(int) string) func(*protocol.CompletionItem) {
 		return func(c *protocol.CompletionItem) {
 			c.Detail = detail
 			// NOTE: This assumes that 2 spaces are used for indentation
-			c.InsertText = c.Label + ":\n  "
+			c.InsertText = c.Label + post(1)
+			c.InsertTextMode = protocol.InsertTextModeAsIs
 		}
 	}
 	return &protocol.CompletionList{
@@ -754,10 +756,22 @@ func completeTopLevelKeys(doc *document) (*protocol.CompletionList, error) {
 			}
 			return s
 		}), []util.Tuple[string, func(*protocol.CompletionItem)]{
-			{A: "configuration", B: setDetails("Configuration values used in Pulumi YAML")},
-			{A: "resources", B: setDetails("A map of of Pulumi Resources")},
-			{A: "outputs", B: setDetails("A map of outputs")},
-			{A: "variables", B: setDetails("A map of variable names to their values")},
+			{A: "configuration",
+				B: setDetails("Configuration values used in Pulumi YAML", postFix.intoObject)},
+			{A: "resources",
+				B: setDetails("A map of of Pulumi Resources", postFix.intoObject)},
+			{A: "outputs",
+				B: setDetails("A map of outputs", postFix.intoObject)},
+			{A: "variables",
+				B: setDetails("A map of variable names to their values", postFix.intoObject)},
+			{A: "name",
+				B: setDetails("The name of your project", postFix.sameLine)},
+			{A: "runtime",
+				B: setDetails("The runtime of your project", postFix.sameLine)},
+			{A: "description",
+				B: setDetails("The description of your project", postFix.sameLine)},
+			{A: "plugins",
+				B: setDetails("Specify what plugins you use. Intended for package authors", postFix.intoObject)},
 		}),
 	}, nil
 }
