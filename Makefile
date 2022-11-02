@@ -72,6 +72,7 @@ name=$(subst schema-,,$(word 1,$(subst !, ,$@)))
 # Here we take the second word, just the version
 version=$(word 2,$(subst !, ,$@))
 schema-%:
+	@mkdir -p ${SCHEMA_PATH}
 	@echo "Ensuring schema ${name}, ${version}"
 	@# Download the package from github, then stamp in the correct version.
 	@[ -f ${SCHEMA_PATH}/${name}-${version}.json ] || \
