@@ -7,15 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blang/semver"
 	"github.com/hashicorp/hcl/v2"
 	yaml "github.com/pulumi/pulumi-yaml/pkg/pulumiyaml"
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/testing/utils"
-	"github.com/pulumi/pulumi/pkg/v3/resource/deploy/deploytest"
-	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
-	"github.com/pulumi/pulumi/sdk/v3/go/common/tokens"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.lsp.dev/protocol"
@@ -29,17 +25,17 @@ runtime: yaml
 description: An EKS cluster
 variables:
   vpcId:
-    Fn::Invoke:
-      Function: aws:ec2:getVpc
-      Arguments:
+    fn::invoke:
+      function: aws:ec2:getVpc
+      arguments:
         default: true
-      Return: id
+      return: id
   subnetIds:
-    Fn::Invoke:
-      Function: aws:ec2:getSubnetIds
-      Arguments:
+    fn::invoke:
+      function: aws:ec2:getSubnetIds
+      arguments:
         vpcId: ${vpcId}
-      Return: ids
+      return: ids
 resources:
   cluster:
     type: eks:Cluster
@@ -166,17 +162,7 @@ var defaultPlugins []yaml.Plugin = []yaml.Plugin{
 
 func newPluginLoader() schema.ReferenceLoader {
 	schemaLoadPath := filepath.Join("..", "testdata")
-	host := func(pkg tokens.Package, version semver.Version) *deploytest.PluginLoader {
-		return deploytest.NewProviderLoader(pkg, version, func() (plugin.Provider, error) {
-			return utils.NewProviderLoader(pkg.String())(schemaLoadPath)
-		})
-	}
-	var pluginLoaders []*deploytest.PluginLoader
-	for _, p := range defaultPlugins {
-		pluginLoaders = append(pluginLoaders, host(tokens.Package(p.Package), semver.MustParse(p.Version)))
-	}
-
-	return schema.NewPluginLoader(deploytest.NewPluginHost(nil, nil, nil, pluginLoaders...))
+	return schema.NewPluginLoader(utils.NewHost(schemaLoadPath))
 }
 
 var rootPluginLoader schema.ReferenceLoader = newPluginLoader()
