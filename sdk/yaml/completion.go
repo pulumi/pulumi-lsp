@@ -17,6 +17,8 @@ import (
 	"github.com/pulumi/pulumi-lsp/sdk/util"
 )
 
+const FnPrefix = "fn::"
+
 // Tries to provide completion withing symbols and references.
 func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) (*protocol.CompletionList, error) {
 	refTxt, err := doc.text.Window(*ref.Range())
@@ -116,34 +118,34 @@ func completionItemFromType(t schema.Type) protocol.CompletionItem {
 	case schema.StringType:
 		return protocol.CompletionItem{
 			Kind:   protocol.CompletionItemKindText,
-			Detail: "String",
+			Detail: "string",
 		}
 	case schema.ArchiveType:
 		return protocol.CompletionItem{
 			Kind:   protocol.CompletionItemKindFile,
-			Detail: "Archive",
+			Detail: "archive",
 		}
 	case schema.AssetType:
 		return protocol.CompletionItem{
 			Kind:   protocol.CompletionItemKindFile,
-			Detail: "Asset",
+			Detail: "asset",
 		}
 	case schema.BoolType:
 		return protocol.CompletionItem{
 			Kind:   protocol.CompletionItemKindValue,
-			Detail: "Boolean",
+			Detail: "boolean",
 		}
 	case schema.IntType:
 		fallthrough
 	case schema.NumberType:
 		return protocol.CompletionItem{
 			Kind:   protocol.CompletionItemKindValue,
-			Detail: "Number",
+			Detail: "number",
 		}
 	case schema.AnyType:
 		return protocol.CompletionItem{
 			Kind:   protocol.CompletionItemKindValue,
-			Detail: "Any",
+			Detail: "any",
 		}
 	}
 	switch t := t.(type) {
@@ -182,12 +184,12 @@ func completionItemFromType(t schema.Type) protocol.CompletionItem {
 		}
 	case *schema.ArrayType:
 		inner := completionItemFromType(t.ElementType)
-		inner.Detail = fmt.Sprintf("List<%s>", inner.Detail)
+		inner.Detail = fmt.Sprintf("list<%s>", inner.Detail)
 		inner.Kind = protocol.CompletionItemKindVariable
 		return inner
 	case *schema.MapType:
 		inner := completionItemFromType(t.ElementType)
-		inner.Detail = fmt.Sprintf("Map<%s>", inner.Detail)
+		inner.Detail = fmt.Sprintf("map<%s>", inner.Detail)
 		inner.Kind = protocol.CompletionItemKindVariable
 		return inner
 	default:
@@ -540,17 +542,17 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 		return completeFunctionArgumentKeys(c, doc, parents[1].A, parents[0].A, s, post, len(parents))
 	case matchesPath("fn::invoke"):
 		return providedCompletions([]option{
-			{"Function", "string", "The name of the function to invoke.", post.sameLine},
-			{"Arguments", "map<string, any>", "The arguments to the function.", post.intoObject},
-			{"Return", "string", "An index into the return value.", post.sameLine},
-			{"Options", "InvokeOptions", "Options to control the invoke.", post.intoObject},
+			{"function", "string", "The name of the function to invoke.", post.sameLine},
+			{"arguments", "map<string, any>", "The arguments to the function.", post.intoObject},
+			{"return", "string", "An index into the return value.", post.sameLine},
+			{"options", "invokeOptions", "Options to control the invoke.", post.intoObject},
 		})
 	case matchesPath("fn::invoke", "options"):
 		return providedCompletions([]option{
-			{"Parent", "Resource", "The parent resource of this invoke.", post.sameLine},
-			{"Provider", "Provider", "The explicit provider for this invoke.", post.sameLine},
-			{"Version", "string", "The provider version to use for this invoke.", post.sameLine},
-			{"PluginDownloadURL", "string", "The provider plugin download URL to use for this invoke.", post.sameLine},
+			{"parent", "resource", "The parent resource of this invoke.", post.sameLine},
+			{"provider", "provider", "The explicit provider for this invoke.", post.sameLine},
+			{"version", "string", "The provider version to use for this invoke.", post.sameLine},
+			{"pluginDownloadURL", "string", "The provider plugin download URL to use for this invoke.", post.sameLine},
 		})
 	default:
 		line, err := doc.text.Line(int(params.Position.Line))
@@ -568,36 +570,36 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 
 func builtinFunctions(postFix postFix) []option {
 	return []option{
-		{"Join", "", "Join a list of strings together.", postFix.intoList},
-		{"Split", "", "Split a string into a list.", postFix.intoList},
-		{"ToJSON", "", "Encode a value into a string as JSON.", postFix.intoList},
-		{"Select", "", "Select an element from a list by index.", postFix.intoList},
-		{"ToBase64", "", "Encode a string with base64", postFix.intoList},
-		{"FileAsset", "", "Create an Asset from a file path.", postFix.sameLine},
-		{"StringAsset", "", "Create an Asset from a string.", postFix.sameLine},
-		{"RemoteAsset", "", "Create an Asset from a remote URL.", postFix.sameLine},
-		{"FileArchive", "", "Create an Archive from a file path.", postFix.sameLine},
-		{"RemoteArchive", "", "Create an Archive from a remote URL", postFix.sameLine},
-		{"AssetArchive", "", "Create an Archive from a map of Assets or Archives.", postFix.intoObject},
-		{"Secret", "", "Make a value secret", postFix.sameLine},
-		{"ReadFile", "", "Read a file into a string.", postFix.sameLine},
+		{"join", "", "Join a list of strings together.", postFix.intoList},
+		{"split", "", "Split a string into a list.", postFix.intoList},
+		{"toJSON", "", "Encode a value into a string as JSON.", postFix.intoList},
+		{"select", "", "Select an element from a list by index.", postFix.intoList},
+		{"toBase64", "", "Encode a string with base64", postFix.intoList},
+		{"fileAsset", "", "Create an Asset from a file path.", postFix.sameLine},
+		{"stringAsset", "", "Create an Asset from a string.", postFix.sameLine},
+		{"remoteAsset", "", "Create an Asset from a remote URL.", postFix.sameLine},
+		{"fileArchive", "", "Create an Archive from a file path.", postFix.sameLine},
+		{"remoteArchive", "", "Create an Archive from a remote URL", postFix.sameLine},
+		{"assetArchive", "", "Create an Archive from a map of Assets or Archives.", postFix.intoObject},
+		{"secret", "", "Make a value secret", postFix.sameLine},
+		{"readFile", "", "Read a file into a string.", postFix.sameLine},
 	}
 }
 
-// Complete `Fn::` into either a builtin function or a invoke.
+// Complete `fn::` into either a builtin function or a invoke.
 func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix postFix, s *server) (*protocol.CompletionList, error) {
-	c.LogWarningf("Calling Fn:: completion")
+	c.LogWarningf("Calling fn:: completion")
 	builtinFns := util.MapOver(builtinFunctions(postFix), func(o option) protocol.CompletionItem {
 		return protocol.CompletionItem{
 			CommitCharacters: []string{":"},
 			Detail:           o.typ,
 			Documentation:    o.detail,
-			InsertText:       "Fn::" + o.label + o.post(indentLevel),
+			InsertText:       FnPrefix + o.label + o.post(indentLevel),
 			InsertTextMode:   protocol.InsertTextModeAsIs,
 			Kind:             protocol.CompletionItemKindFunction,
 			Label:            o.label,
 			SortText:         "2" + o.label,
-			FilterText:       "Fn::" + o.label,
+			FilterText:       FnPrefix + o.label,
 		}
 	})
 	parts := strings.Split(strings.TrimPrefix(strings.ToLower(line), "fn::"), ":")
@@ -616,7 +618,7 @@ func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix pos
 				InsertText:       p.Name() + ":",
 				Kind:             protocol.CompletionItemKindModule,
 				Label:            p.Name(),
-				FilterText:       "Fn::" + p.Name(),
+				FilterText:       FnPrefix + p.Name(),
 				SortText:         "1" + p.Name(),
 			}
 		})
@@ -821,32 +823,32 @@ func providedCompletions(
 
 func completeResourceOptionsKeys(doc *document, keyPos protocol.Position, post postFix) (*protocol.CompletionList, error) {
 	return providedCompletions(doc, keyPos, 4, []option{
-		{"additionalSecretOutputs", "List<String>",
+		{"additionalSecretOutputs", "list<string>",
 			"AdditionalSecretOutputs specifies properties that must be encrypted as secrets", post.intoList},
-		{"aliases", "List<String>",
+		{"aliases", "list<string>",
 			"Aliases specifies names that this resource used to be have so that renaming or refactoring doesn’t replace it", post.intoList},
-		{"customTimeouts", "CustomTimeout",
+		{"customTimeouts", "customTimeout",
 			"CustomTimeouts overrides the default retry/timeout behavior for resource provisioning", post.intoObject},
-		{"deleteBeforeReplace", "Boolean",
+		{"deleteBeforeReplace", "boolean",
 			"DeleteBeforeReplace overrides the default create-before-delete behavior when replacing", post.sameLine},
-		{"dependsOn", "List<Expression>",
+		{"dependsOn", "list<expression>",
 			"DependsOn makes this resource explicitly depend on another resource, by name, so that it won't be created before the " +
 				"dependent finishes being created (and the reverse for destruction). Normally, Pulumi automatically tracks implicit" +
 				" dependencies through inputs/outputs, but this can be used when dependencies aren't captured purely from input/output edges.",
 			post.intoList},
-		{"ignoreChanges", "List<String>",
+		{"ignoreChanges", "list<string>",
 			"IgnoreChanges declares that changes to certain properties should be ignored during diffing", post.intoList},
-		{"import", "String",
+		{"import", "string",
 			"Import adopts an existing resource from your cloud account under the control of Pulumi", post.sameLine},
-		{"parent", "Resource",
+		{"parent", "resource",
 			"Parent specifies a parent for the resource", post.sameLine},
-		{"protect", "Boolean",
+		{"protect", "boolean",
 			"Protect prevents accidental deletion of a resource", post.sameLine},
-		{"provider", "Provider Resource",
+		{"provider", "provider resource",
 			"Provider specifies an explicitly configured provider, instead of using the default global provider", post.sameLine},
-		{"providers", "Map<Provider Resource>",
+		{"providers", "map<provider resource>",
 			"Map of providers for a resource and its children.", post.intoObject},
-		{"version", "String",
+		{"version", "string",
 			"Version specifies a provider plugin version that should be used when operating on a resource", post.sameLine},
 	})
 }

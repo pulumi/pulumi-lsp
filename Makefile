@@ -62,20 +62,53 @@ lint-copyright:
 												    (package-initialize) \
                                                     (package-install 'yaml-mode) (package-install 'lsp-mode))" -f batch-byte-compile $(notdir $<)
 
+
+# Awsx has a different directory structure, so it needs to be special cased.
+schema-awsx!1.0.0-beta.5: url = "https://raw.githubusercontent.com/pulumi/pulumi-awsx/v${version}/awsx/schema.json"
+
 SCHEMA_PATH := sdk/yaml/testdata
+# We replace the '!' with a space, then take the first word
+# schema-pkg!x.y.z => schema-pkg
+# We then replace 'schema-' with nothing, giving only the package name.
+# schema-pkg => pkg
+# Recall that `$@` is the target make is trying to build, in our case schema-pkg!x.y.z
 name=$(subst schema-,,$(word 1,$(subst !, ,$@)))
+# Here we take the second word, just the version
 version=$(word 2,$(subst !, ,$@))
+schema-%: url ?= "https://raw.githubusercontent.com/pulumi/pulumi-${name}/v${version}/provider/cmd/pulumi-resource-${name}/schema.json"
 schema-%:
-	@echo "Ensuring $@ => ${name}, ${version}"
-	mkdir -p sdk/yaml/testdata
-	@[ -f ${SCHEMA_PATH}/${name}.json ] || \
-		curl "https://raw.githubusercontent.com/pulumi/pulumi-${name}/v${version}/provider/cmd/pulumi-resource-${name}/schema.json" \
-	 	| jq '.version = "${version}"' >  ${SCHEMA_PATH}/${name}.json
-	@FOUND="$$(jq -r '.version' ${SCHEMA_PATH}/${name}.json)" &&                           \
+	@mkdir -p ${SCHEMA_PATH}
+	@echo "Ensuring schema ${name}, ${version}"
+# Download the package from github, then stamp in the correct version.
+	@[ -f ${SCHEMA_PATH}/${name}-${version}.json ] || \
+		curl ${url} \
+		| jq '.version = "${version}"' >  ${SCHEMA_PATH}/${name}-${version}.json
+# Confirm that the correct version is present. If not, error out.
+	@FOUND="$$(jq -r '.version' ${SCHEMA_PATH}/${name}-${version}.json)" &&        \
 		if ! [ "$$FOUND" = "${version}" ]; then									           \
 			echo "${name} required version ${version} but found existing version $$FOUND"; \
 			exit 1;																		   \
 		fi
-get_schemas: schema-aws!4.26.0       \
-			 schema-eks!0.37.1       \
-             schema-kubernetes!3.7.2
+
+# This needs to mirror the list found in pulumi/pulumi
+get_schemas: \
+			schema-aws!4.26.0           \
+			schema-aws!4.36.0           \
+			schema-aws!4.37.1           \
+			schema-aws!5.4.0            \
+			schema-aws!5.16.2           \
+			schema-azure-native!1.28.0  \
+			schema-azure-native!1.29.0  \
+			schema-azure-native!1.56.0  \
+			schema-azure!4.18.0         \
+			schema-kubernetes!3.0.0     \
+			schema-kubernetes!3.7.0     \
+			schema-kubernetes!3.7.2     \
+			schema-random!4.2.0         \
+			schema-random!4.3.1         \
+			schema-eks!0.37.1           \
+			schema-eks!0.40.0           \
+			schema-docker!3.1.0         \
+			schema-awsx!1.0.0-beta.5    \
+			schema-aws-native!0.13.0    \
+			schema-google-native!0.18.2
