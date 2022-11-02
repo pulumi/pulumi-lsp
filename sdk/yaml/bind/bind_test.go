@@ -148,18 +148,6 @@ variables:
 	assert.Equal(t, rangeOnLine(3, 9, 21, 24), use.access[0].rnge)
 }
 
-var defaultPlugins []yaml.Plugin = []yaml.Plugin{
-	{Package: "aws", Version: "4.26.0"},
-	{Package: "kubernetes", Version: "3.7.2"},
-	{Package: "eks", Version: "0.37.1"},
-
-	// Extra packages are to satisfy the versioning requirement of aws-eks.
-	// While the schemas are not the correct version, we rely on not
-	// depending on the difference between them.
-	{Package: "aws", Version: "4.15.0"},
-	{Package: "kubernetes", Version: "3.0.0"},
-}
-
 func newPluginLoader() schema.ReferenceLoader {
 	schemaLoadPath := filepath.Join("..", "testdata")
 	return schema.NewPluginLoader(utils.NewHost(schemaLoadPath))
