@@ -62,6 +62,10 @@ lint-copyright:
 												    (package-initialize) \
                                                     (package-install 'yaml-mode) (package-install 'lsp-mode))" -f batch-byte-compile $(notdir $<)
 
+
+# Awsx has a different directory structure, so it needs to be special cased.
+schema-awsx!1.0.0-beta.5: url = "https://raw.githubusercontent.com/pulumi/pulumi-awsx/v${version}/awsx/schema.json"
+
 SCHEMA_PATH := sdk/yaml/testdata
 # We replace the '!' with a space, then take the first word
 # schema-pkg!x.y.z => schema-pkg
@@ -71,14 +75,15 @@ SCHEMA_PATH := sdk/yaml/testdata
 name=$(subst schema-,,$(word 1,$(subst !, ,$@)))
 # Here we take the second word, just the version
 version=$(word 2,$(subst !, ,$@))
+schema-%: url ?= "https://raw.githubusercontent.com/pulumi/pulumi-${name}/v${version}/provider/cmd/pulumi-resource-${name}/schema.json"
 schema-%:
 	@mkdir -p ${SCHEMA_PATH}
 	@echo "Ensuring schema ${name}, ${version}"
-	@# Download the package from github, then stamp in the correct version.
+# Download the package from github, then stamp in the correct version.
 	@[ -f ${SCHEMA_PATH}/${name}-${version}.json ] || \
-		curl "https://raw.githubusercontent.com/pulumi/pulumi-${name}/v${version}/provider/cmd/pulumi-resource-${name}/schema.json" \
+		curl ${url} \
 		| jq '.version = "${version}"' >  ${SCHEMA_PATH}/${name}-${version}.json
-	@# Confirm that the correct version is present. If not, error out.
+# Confirm that the correct version is present. If not, error out.
 	@FOUND="$$(jq -r '.version' ${SCHEMA_PATH}/${name}-${version}.json)" &&        \
 		if ! [ "$$FOUND" = "${version}" ]; then									           \
 			echo "${name} required version ${version} but found existing version $$FOUND"; \
