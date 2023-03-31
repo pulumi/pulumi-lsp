@@ -1,13 +1,13 @@
 module github.com/pulumi/pulumi-lsp
 
-go 1.18
+go 1.20
 
 require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/hashicorp/hcl/v2 v2.14.0
-	github.com/pulumi/pulumi-yaml v0.5.10
-	github.com/pulumi/pulumi/pkg/v3 v3.45.0
-	github.com/pulumi/pulumi/sdk/v3 v3.45.0
+	github.com/pulumi/pulumi-yaml v1.0.4
+	github.com/pulumi/pulumi/pkg/v3 v3.48.1-0.20221207010559-e812f69ba562
+	github.com/pulumi/pulumi/sdk/v3 v3.48.1-0.20221207010559-e812f69ba562
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.0
 	go.lsp.dev/jsonrpc2 v0.10.0
