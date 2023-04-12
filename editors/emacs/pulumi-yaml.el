@@ -1,6 +1,11 @@
 ;;; package --- pulumi-yaml -*- lexical-binding: t; -*-
+;;
+;; Copyright 2022, Pulumi Corporation.  All rights reserved.
+;; Package-Requires: ((emacs "27.1") (yaml-mode))
 
 ;;; Commentary:
+
+;;; Code:
 
 (require 'yaml-mode)
 
