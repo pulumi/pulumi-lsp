@@ -14,7 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+        with:
+           set-safe-directory: true
+      - name: Make directory safe
+        run: git config --global --add safe.directory /__w/pulumi-lsp/pulumi-lsp
       - name: Lint
         # TODO: Enable linting after a cleanup commit.
         # Avoiding in this commit so as to not mix code changes w/ CI changes.
@@ -23,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Install pulumictl
         uses: jaxxstorm/action-install-gh-release@v1.5.0
         with:

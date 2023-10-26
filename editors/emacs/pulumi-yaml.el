@@ -60,6 +60,7 @@ Note: automatic downloads are only supported when using `lsp-mode'."
 Note: automatic downloads are only supported when using `lsp-mode'."
   :group 'pulumi-yaml :type 'string)
 
+;;;###autoload
 (define-derived-mode pulumi-yaml-mode yaml-mode "Pulumi YAML"
   "A YAML derivative specifically for writing Pulumi programs in YAML."
   :group 'pulumi-yaml
