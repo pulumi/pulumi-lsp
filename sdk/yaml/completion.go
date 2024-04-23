@@ -55,9 +55,14 @@ func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) 
 		}
 		return &protocol.CompletionList{Items: list}, nil
 	} else if v := ref.ref.Var(); v != nil {
+		source := v.Source()
+		if source == nil {
+			c.LogWarningf("Could not complete for %s: missing source", refTxt)
+		}
+
 		// We have an associated variable, and are not at the top level. We
 		// should try to drill into the variable.
-		varRoot := v.Source().ResolveType(b.A)
+		varRoot := source.ResolveType(b.A)
 		if varRoot != nil {
 			// Don't bother with the error message, it will have already been
 			// displayed.
@@ -77,8 +82,9 @@ func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) 
 // all results to prevent the filter from being eaten by the host.
 //
 // For example:
-//   typePropertyCompletion(type({foo: string, bar: int}), "someType.") would
-//   complete to ["someType.foo", "someType.bar"].
+//
+//	typePropertyCompletion(type({foo: string, bar: int}), "someType.") would
+//	complete to ["someType.foo", "someType.bar"].
 func (s *server) typePropertyCompletion(t schema.Type, filterPrefix string) (*protocol.CompletionList, error) {
 	var props []*schema.Property
 	switch t := codegen.UnwrapType(t).(type) {
