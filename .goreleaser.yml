@@ -1,5 +1,6 @@
 dist: goreleaser
 project_name: pulumi-lsp
+version: 2
 snapshot:
   name_template: "{{ .Version }}-SNAPSHOT"
 checksum:
