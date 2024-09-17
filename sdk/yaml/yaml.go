@@ -121,7 +121,7 @@ func (s *server) hover(client lsp.Client, params *protocol.HoverParams) (*protoc
 	}
 	typ, err := doc.objectAtPoint(pos)
 	if err != nil {
-		client.LogErrorf(err.Error())
+		client.LogErrorf("%s", err.Error())
 		return nil, nil
 	}
 	client.LogInfof("Object found for hover: %v", typ)
@@ -158,7 +158,7 @@ func (s *server) completion(client lsp.Client, params *protocol.CompletionParams
 
 	o, err := doc.objectAtPoint(params.Position)
 	if err != nil {
-		client.LogErrorf(err.Error())
+		client.LogErrorf("%s", err.Error())
 		return nil, nil
 	}
 	client.LogInfof("Object found for completion: %v", o)
