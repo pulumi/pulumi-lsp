@@ -77,8 +77,9 @@ func (s *server) completeReference(c lsp.Client, doc *document, ref *Reference) 
 // all results to prevent the filter from being eaten by the host.
 //
 // For example:
-//   typePropertyCompletion(type({foo: string, bar: int}), "someType.") would
-//   complete to ["someType.foo", "someType.bar"].
+//
+//	typePropertyCompletion(type({foo: string, bar: int}), "someType.") would
+//	complete to ["someType.foo", "someType.bar"].
 func (s *server) typePropertyCompletion(t schema.Type, filterPrefix string) (*protocol.CompletionList, error) {
 	var props []*schema.Property
 	switch t := codegen.UnwrapType(t).(type) {
@@ -850,6 +851,8 @@ func completeResourceOptionsKeys(doc *document, keyPos protocol.Position, post p
 			"Map of providers for a resource and its children.", post.intoObject},
 		{"version", "string",
 			"Version specifies a provider plugin version that should be used when operating on a resource", post.sameLine},
+		{"retainOnDelete", "boolean",
+			"Retain on delete leaks the resource on delete instead of removing it from the underlying cloud", post.sameLine},
 	})
 }
 
