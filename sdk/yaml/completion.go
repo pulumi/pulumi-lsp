@@ -2,6 +2,7 @@
 package yaml
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strings"
@@ -256,7 +257,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 			case 1:
 				doPad := strings.TrimPrefix(line, prefix) == ""
 				return &protocol.CompletionList{
-					Items: s.pkgCompletionList(func(p schema.PackageReference) *protocol.CompletionItem {
+					Items: s.pkgCompletionList(client.Context(), func(p schema.PackageReference) *protocol.CompletionItem {
 						hasResources := p.Resources().Range().Next()
 						if !hasResources {
 							return nil
@@ -292,7 +293,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 						}},
 					}, nil
 				}
-				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], version())
+				pkg, err := s.schemas.LoadPackageReference(parts[0], version())
 				if err != nil {
 					return nil, err
 				}
@@ -304,12 +305,10 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 			case 3:
 				if parts[0] == "pulumi" {
 					if parts[1] == "providers" {
-						s.schemas.m.Lock()
-						defer s.schemas.m.Unlock()
 						return &protocol.CompletionList{
 							IsIncomplete: false,
-							Items: util.MapOver(util.MapKeys(s.schemas.cache), func(t util.Tuple[string, string]) protocol.CompletionItem {
-								mod := t.A
+							Items: util.MapOver(s.schemas.Loaded(), func(t schema.PackageDescriptor) protocol.CompletionItem {
+								mod := t.Name
 								return protocol.CompletionItem{
 									FilterText:       "pulumi:providers:" + mod,
 									InsertText:       mod,
@@ -324,7 +323,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 					// There are no valid completions for this token
 					return nil, nil
 				}
-				pkg, err := s.schemas.Loader(client).LoadPackageReference(parts[0], version())
+				pkg, err := s.schemas.LoadPackageReference(parts[0], version())
 				if err != nil {
 					return nil, err
 				}
@@ -347,12 +346,19 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 }
 
 // Return the list of currently loaded packages.
-func (s *server) pkgCompletionList(getItem func(p schema.PackageReference) *protocol.CompletionItem) []protocol.CompletionItem {
-	s.schemas.m.Lock()
-	defer s.schemas.m.Unlock()
-	schemas := util.MapValues(s.schemas.cache)
-	schemas = append(schemas, schema.DefaultPulumiPackage.Reference())
-	return util.FilterMap(schemas, getItem)
+func (s *server) pkgCompletionList(ctx context.Context, getItem func(p schema.PackageReference) *protocol.CompletionItem) []protocol.CompletionItem {
+	loaded := s.schemas.Loaded()
+	refs := make([]schema.PackageReference, 0, len(loaded))
+	for _, d := range loaded {
+		ref, err := s.schemas.LoadPackageReferenceV2(ctx, &d)
+		if err != nil {
+			// TODO: Log an error here
+			continue
+		}
+		refs = append(refs, ref)
+	}
+	refs = append(refs, schema.DefaultPulumiPackage.Reference())
+	return util.FilterMap(refs, getItem)
 }
 
 // Return the completion list of modules for a given package.
@@ -608,7 +614,7 @@ func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix pos
 	switch len(parts) {
 	case 1:
 		// Complete either builtins or packages
-		lst := s.pkgCompletionList(func(p schema.PackageReference) *protocol.CompletionItem {
+		lst := s.pkgCompletionList(c.Context(), func(p schema.PackageReference) *protocol.CompletionItem {
 			hasFunctions := p.Functions().Range().Next()
 			if !hasFunctions {
 				return nil
@@ -632,7 +638,7 @@ func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix pos
 				return nil, nil
 			}
 		}
-		pkg, err := s.schemas.Loader(c).LoadPackageReference(parts[0], nil)
+		pkg, err := s.schemas.LoadPackageReference(parts[0], nil)
 		if err != nil {
 			return nil, err
 		}
@@ -690,7 +696,7 @@ func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix pos
 
 	case 3:
 		// Here we are completing only invokes in specific modules
-		pkg, err := s.schemas.Loader(c).LoadPackageReference(parts[0], nil)
+		pkg, err := s.schemas.LoadPackageReference(parts[0], nil)
 		if err != nil {
 			return nil, err
 		}
@@ -938,7 +944,7 @@ func completeResourcePropertyKeys(
 			version = s
 		}
 	}
-	resource, err := s.schemas.ResolveResource(c, typ, version)
+	resource, err := resolveResource(c, s.schemas, typ, version)
 	if err != nil || resource == nil {
 		return nil, err
 	}
@@ -1010,7 +1016,7 @@ func completeFunctionArgumentKeys(
 			version = s
 		}
 	}
-	fn, err := s.schemas.ResolveFunction(c, typ, version)
+	fn, err := resolveFunction(c, s.schemas, typ, version)
 	if err != nil || fn == nil || fn.Inputs == nil {
 		return nil, err
 	}

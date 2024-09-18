@@ -5,33 +5,27 @@ package yaml
 
 import (
 	"fmt"
-	"sync"
 
 	"go.lsp.dev/protocol"
 
-	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
 
 	"github.com/pulumi/pulumi-lsp/sdk/lsp"
-	"github.com/pulumi/pulumi-lsp/sdk/util"
 	"github.com/pulumi/pulumi-lsp/sdk/version"
+	"github.com/pulumi/pulumi-lsp/sdk/yaml/util/loader"
 )
 
 // The holder server level state.
 type server struct {
 	docs    map[protocol.DocumentURI]*document
-	schemas *SchemaCache
+	schemas loader.ReferenceLoader
 }
 
 // Create the set of methods necessary to implement a LSP server for Pulumi YAML.
 func Methods(host plugin.Host) *lsp.Methods {
 	server := &server{
-		docs: map[protocol.DocumentURI]*document{},
-		schemas: &SchemaCache{
-			inner: schema.NewPluginLoader(host),
-			m:     &sync.Mutex{},
-			cache: map[util.Tuple[string, string]]schema.PackageReference{},
-		},
+		docs:    map[protocol.DocumentURI]*document{},
+		schemas: loader.New(host),
 	}
 	return lsp.Methods{
 		DidOpenFunc:    server.didOpen,
@@ -70,8 +64,7 @@ func (d *document) process(c lsp.Client) {
 	if d.analysis != nil {
 		d.analysis.cancel()
 	}
-	loader := d.server.schemas.Loader(c)
-	d.analysis = NewDocumentAnalysisPipeline(c, d.text, loader)
+	d.analysis = NewDocumentAnalysisPipeline(c, d.text, d.server.schemas)
 }
 
 func (s *server) didOpen(client lsp.Client, params *protocol.DidOpenTextDocumentParams) error {

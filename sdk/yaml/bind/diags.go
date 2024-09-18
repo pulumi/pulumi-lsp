@@ -49,7 +49,7 @@ func variableDoesNotExistDiag(name string, use Reference) *hcl.Diagnostic {
 }
 
 func propertyDoesNotExistDiag(prop, parent string, suggestedProps []string, loc *hcl.Range) *hcl.Diagnostic {
-	f := diags.NonExistantFieldFormatter{
+	f := diags.NonExistentFieldFormatter{
 		ParentLabel:         parent,
 		Fields:              suggestedProps,
 		MaxElements:         0,
