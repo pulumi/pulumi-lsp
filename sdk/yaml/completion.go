@@ -853,6 +853,8 @@ func completeResourceOptionsKeys(doc *document, keyPos protocol.Position, post p
 			"Version specifies a provider plugin version that should be used when operating on a resource", post.sameLine},
 		{"retainOnDelete", "boolean",
 			"Retain on delete leaks the resource on delete instead of removing it from the underlying cloud", post.sameLine},
+		{"deletedWith", "resource",
+			"Deleted with leaks the resource on delete if the referenced resource is also deleted", post.sameLine},
 	})
 }
 
