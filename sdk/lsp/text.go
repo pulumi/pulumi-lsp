@@ -142,7 +142,7 @@ func (d *Document) acceptChange(change protocol.TextDocumentContentChangeEvent) 
 	lines := strings.Split(change.Text, lineDeliminator)
 	s := change.Range.Start
 	e := change.Range.End
-	contract.Assert(len(lines) != 0)
+	contract.Assertf(len(lines) != 0, "The change should have at least one line of content")
 
 	if s.Line == e.Line {
 		l := d.lines[s.Line]
