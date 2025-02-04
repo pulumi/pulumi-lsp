@@ -15,6 +15,8 @@ archives:
 builds:
   - id: pulumi-lsp
     binary: pulumi-lsp
+    env:
+      - CGO_ENABLED=0
     goarch:
       - amd64
       - arm64
