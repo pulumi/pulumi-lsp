@@ -50,25 +50,25 @@ jobs:
             file: windows_amd64_v1
           - platform: win32
             arch: arm64
-            file: windows_arm64
+            file: windows_arm64_v8.0
           - platform: linux
             arch: x64
             file: linux_amd64_v1
           - platform: linux
             arch: arm64
-            file: linux_arm64
+            file: linux_arm64_v8.0
           - platform: linux
             arch: armhf
-            file: linux_arm64
+            file: linux_arm64_v8.0
           - platform: alpine
             arch: x64
-            file: linux_arm64
+            file: linux_amd64_v1
           - platform: darwin
             arch: x64
             file: darwin_amd64_v1
           - platform: darwin
             arch: arm64
-            file: darwin_arm64
+            file: darwin_arm64_v8.0
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
