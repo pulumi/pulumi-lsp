@@ -55,7 +55,7 @@ func (d *documentAnalysisPipeline) parse(text lsp.Document) {
 		if err != nil {
 			parseDiags = append(parseDiags, d.promoteError("Parse error", err))
 		} else if d.parsed == nil {
-			parseDiags = append(parseDiags, d.promoteError("Parse error", fmt.Errorf("No template returned")))
+			parseDiags = append(parseDiags, d.promoteError("Parse error", fmt.Errorf("no template returned")))
 		}
 
 		for _, d := range parseDiags {

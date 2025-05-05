@@ -50,7 +50,7 @@ test: get_schemas
 .phony: lint lint-copyright lint-golang
 lint:: lint-copyright lint-golang
 lint-golang:
-	golangci-lint --timeout 5m -c .golangci.yml run
+	golangci-lint run --timeout 5m --config .golangci.yml
 lint-copyright:
 	pulumictl copyright
 

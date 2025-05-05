@@ -171,7 +171,7 @@ func childKeys(text lsp.Document, pos protocol.Position) (map[string]protocol.Po
 	}
 	topLevel, blank := indentationLevel(line)
 	if blank {
-		return nil, fmt.Errorf("Cannot call subsidiaryKeys on a blank line")
+		return nil, fmt.Errorf("cannot call subsidiaryKeys on a blank line")
 	}
 	level := -1
 	m := map[string]protocol.Position{}

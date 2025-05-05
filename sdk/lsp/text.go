@@ -93,10 +93,10 @@ func (d *Document) Line(i int) (string, error) {
 	d.m.Lock()
 	defer d.m.Unlock()
 	if i < 0 {
-		return "", fmt.Errorf("Cannot access negative line")
+		return "", fmt.Errorf("cannot access negative line")
 	}
 	if i >= len(d.lines) {
-		return "", fmt.Errorf("Line index is %d but there are only %d lines", i, len(d.lines))
+		return "", fmt.Errorf("line index is %d but there are only %d lines", i, len(d.lines))
 	}
 	return d.lines[i], nil
 }

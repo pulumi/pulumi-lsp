@@ -95,7 +95,7 @@ func (s *server) didChange(client lsp.Client, params *protocol.DidChangeTextDocu
 	if err := doc.text.AcceptChanges(params.ContentChanges); err != nil {
 		// Something has gone deeply wrong. We rely on having a reliable copy of
 		// the document.
-		return fmt.Errorf("Document might be unknown: %w", err)
+		return fmt.Errorf("document might be unknown: %w", err)
 	}
 	doc.process(client)
 	return nil
@@ -106,7 +106,7 @@ func (s *server) hover(client lsp.Client, params *protocol.HoverParams) (*protoc
 	doc, ok := s.getDocument(uri)
 	pos := params.Position
 	if !ok {
-		return nil, fmt.Errorf("Could not find an opened document %s", uri.Filename())
+		return nil, fmt.Errorf("could not find an opened document %s", uri.Filename())
 	}
 	if doc.analysis == nil {
 		// Do nothing. We can try again later.
@@ -134,7 +134,7 @@ func (s *server) completion(client lsp.Client, params *protocol.CompletionParams
 	uri := params.TextDocument.URI
 	doc, ok := s.getDocument(uri)
 	if !ok {
-		return nil, fmt.Errorf("Could not find an opened document %s", uri.Filename())
+		return nil, fmt.Errorf("could not find an opened document %s", uri.Filename())
 	}
 
 	// Complete for `type: ...` or `Function: ...`.

@@ -11,6 +11,7 @@ import (
 
 	"github.com/pulumi/pulumi/pkg/v3/codegen"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 
 	"github.com/pulumi/pulumi-lsp/sdk/yaml/bind"
 )
@@ -80,7 +81,8 @@ type Writer = func(msg string, args ...interface{})
 func MakeIOWriter[T any](f func(Writer, T)) func(io.Writer, T) {
 	return func(w io.Writer, t T) {
 		f(func(format string, a ...interface{}) {
-			fmt.Fprintf(w, format, a...)
+			_, err := fmt.Fprintf(w, format, a...)
+			contract.IgnoreError(err)
 		}, t)
 	}
 }
