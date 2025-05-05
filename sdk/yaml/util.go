@@ -84,7 +84,7 @@ func resolveResource(c lsp.Client, loader schema.ReferenceLoader, token, version
 	tokens := strings.Split(token, ":")
 	var pkg string
 	if len(tokens) < 2 {
-		return nil, fmt.Errorf("Invalid token '%s': too few spans", token)
+		return nil, fmt.Errorf("invalid token '%s': too few spans", token)
 	}
 	pkg = tokens[0]
 	var isProvider bool
@@ -105,21 +105,21 @@ func resolveResource(c lsp.Client, loader schema.ReferenceLoader, token, version
 	}
 	schema, err := loader.LoadPackageReference(pkg, v)
 	if err != nil {
-		return nil, fmt.Errorf("Could not resolve resource: %w", err)
+		return nil, fmt.Errorf("could not resolve resource: %w", err)
 	}
 	if isProvider {
 		return schema.Provider()
 	}
 	resolvedToken, err := yaml.NewResourcePackage(schema).ResolveResource(token)
 	if err != nil {
-		return nil, fmt.Errorf("Could not resolve resource: %w", err)
+		return nil, fmt.Errorf("could not resolve resource: %w", err)
 	}
 	resolvedResource, ok, err := schema.Resources().Get(string(resolvedToken))
 	if err != nil {
-		return nil, fmt.Errorf("Could not resolve resource: internal error: %w", err)
+		return nil, fmt.Errorf("could not resolve resource: internal error: %w", err)
 	}
 	if !ok {
-		return nil, fmt.Errorf("Could not resolve resource: internal error: "+
+		return nil, fmt.Errorf("could not resolve resource: internal error: "+
 			"'%s' resolved to '%s' but the resolved token did not exist",
 			token, resolvedToken)
 	}
@@ -130,7 +130,7 @@ func resolveResource(c lsp.Client, loader schema.ReferenceLoader, token, version
 func resolveFunction(c lsp.Client, loader schema.ReferenceLoader, token, version string) (*schema.Function, error) {
 	tokens := strings.Split(token, ":")
 	if len(tokens) < 2 {
-		return nil, fmt.Errorf("Invalid token '%s': too few spans", token)
+		return nil, fmt.Errorf("invalid token '%s': too few spans", token)
 	}
 	pkg := tokens[0]
 	var v *semver.Version
@@ -143,18 +143,18 @@ func resolveFunction(c lsp.Client, loader schema.ReferenceLoader, token, version
 	}
 	schema, err := loader.LoadPackageReference(pkg, v)
 	if err != nil {
-		return nil, fmt.Errorf("Could not resolve function: %w", err)
+		return nil, fmt.Errorf("could not resolve function: %w", err)
 	}
 	resolvedToken, err := yaml.NewResourcePackage(schema).ResolveFunction(token)
 	if err != nil {
-		return nil, fmt.Errorf("Could not resolve function: %w", err)
+		return nil, fmt.Errorf("could not resolve function: %w", err)
 	}
 	resolvedFunction, ok, err := schema.Functions().Get(string(resolvedToken))
 	if err != nil {
-		return nil, fmt.Errorf("Could not resolve function: internal error: %w", err)
+		return nil, fmt.Errorf("could not resolve function: internal error: %w", err)
 	}
 	if !ok {
-		return nil, fmt.Errorf("Could not resolve function: internal error: "+
+		return nil, fmt.Errorf("could not resolve function: internal error: "+
 			"'%s' resolved to '%s' but the resolved token did not exist",
 			token, resolvedToken)
 	}

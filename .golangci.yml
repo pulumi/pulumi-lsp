@@ -1,7 +1,10 @@
-linters-settings:
-  errcheck:
-    exclude-functions:
-      - (*github.com/pulumi/pulumi-lsp/sdk/lsp.Client).LogWarningf
-      - (*github.com/pulumi/pulumi-lsp/sdk/lsp.Client).LogErrorf
-      - (*github.com/pulumi/pulumi-lsp/sdk/lsp.Client).LogInfof
-      - (*github.com/pulumi/pulumi-lsp/sdk/lsp.Client).LogDebugf
+version: "2"
+linters:
+  default: standard
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*github.com/pulumi/pulumi-lsp/sdk/lsp.Client).LogWarningf
+        - (*github.com/pulumi/pulumi-lsp/sdk/lsp.Client).LogErrorf
+        - (*github.com/pulumi/pulumi-lsp/sdk/lsp.Client).LogInfof
+        - (*github.com/pulumi/pulumi-lsp/sdk/lsp.Client).LogDebugf

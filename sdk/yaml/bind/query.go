@@ -17,17 +17,17 @@ func (d *Decl) GetResources(tk, version string) ([]Resource, error) {
 	// First we load the token, so we can get the alias list
 	pkgName, err := pkgNameFromToken(tk)
 	if err != nil {
-		return nil, fmt.Errorf("Cannot get resources: %w", err)
+		return nil, fmt.Errorf("cannot get resources: %w", err)
 	}
 	pkg, ok := d.loadedPackages[pkgKey{pkgName, version}]
 	// We didn't have access to that package
 	if !ok {
 		return nil, fmt.Errorf(
-			"Package '%s' is not loaded for query '%s', loaded packages are %s",
+			"package '%s' is not loaded for query '%s', loaded packages are %s",
 			pkgName, tk, util.MapKeys(d.loadedPackages))
 	}
 	if pkg.p == nil {
-		return nil, fmt.Errorf("Failed to load pkg '%s'", pkgName)
+		return nil, fmt.Errorf("failed to load pkg '%s'", pkgName)
 	}
 	r, ok := pkg.ResolveResource(tk)
 	names := []string{tk}

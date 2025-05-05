@@ -45,7 +45,7 @@ func (d *Decl) LoadSchema(loader schema.ReferenceLoader) {
 				}
 				invoke.definition = f.Function
 				inputs := []*schema.Property{}
-				if i := f.Function.Inputs; i != nil && i.Properties != nil {
+				if i := f.Inputs; i != nil && i.Properties != nil {
 					inputs = i.Properties
 				}
 				args := ast.Object()
@@ -56,7 +56,7 @@ func (d *Decl) LoadSchema(loader schema.ReferenceLoader) {
 					return MapKey{o.Key.(*ast.StringExpr).Value, o.Key.Syntax().Syntax().Range()}
 				}), inputs, f.Token, args.Syntax().Syntax().Range())
 				if ret := invoke.defined.Return; ret != nil {
-					if out := f.Function.Outputs; out != nil {
+					if out := f.Outputs; out != nil {
 						var valid bool
 						existing := map[string]bool{}
 						for _, prop := range out.Properties {
@@ -108,7 +108,7 @@ func (d *Decl) LoadSchema(loader schema.ReferenceLoader) {
 					d.validateProperties(util.MapOver(v.defined.Value.Properties.Entries, func(m ast.PropertyMapEntry) MapKey {
 						return MapKey{m.Key.Value, m.Key.Syntax().Syntax().Range()}
 					}),
-						f.Resource.InputProperties, (&schema.ResourceType{
+						f.InputProperties, (&schema.ResourceType{
 							Token:    f.Resource.Token,
 							Resource: f.Resource,
 						}).String(), v.defined.Key.Syntax().Syntax().Range())
