@@ -1,6 +1,8 @@
 module github.com/pulumi/pulumi-lsp
 
-go 1.23
+go 1.24
+
+toolchain go1.24.1
 
 require (
 	github.com/blang/semver v3.5.1+incompatible
@@ -8,7 +10,7 @@ require (
 	github.com/pulumi/pulumi-yaml v1.10.1
 	github.com/pulumi/pulumi/pkg/v3 v3.132.0
 	github.com/pulumi/pulumi/sdk/v3 v3.132.0
-	github.com/spf13/cobra v1.8.0
+	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
 	go.lsp.dev/jsonrpc2 v0.10.0
 	go.lsp.dev/protocol v0.12.0
@@ -50,6 +52,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/iancoleman/strcase v0.2.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/iwahbe/helpmakego v0.2.0 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
@@ -94,7 +97,7 @@ require (
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
-	golang.org/x/mod v0.19.0 // indirect
+	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
@@ -108,3 +111,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/frand v1.4.2 // indirect
 )
+
+tool github.com/iwahbe/helpmakego

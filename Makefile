@@ -3,22 +3,25 @@ EMACS     := emacs
 NODE      := node
 SHELL     := bash
 
-CONCURRENCY ?= 10
+default: install
 
-default: install server
-
-build: server client
+build: bin/pulumi-lsp client
 
 COMMIT       := $(shell git rev-parse --short HEAD)
 VERSION      := $(shell git describe --tags --match 'v*.*.*' --dirty=${COMMIT})
 LINK_VERSION := -ldflags "-X github.com/pulumi/pulumi-lsp/sdk/version.Version=${VERSION}"
 
-server:
-	mkdir -p ./bin
-	${GO} build ${LINK_VERSION} -o ./bin -p ${CONCURRENCY} ./cmd/...
+_ := $(shell mkdir -p bin)
+_ := $(shell go build -o bin/helpmakego github.com/iwahbe/helpmakego)
 
-install: server
-	${GO} install ${LINK_VERSION} ./cmd/...
+server: bin/pulumi-lsp
+
+bin/pulumi-lsp: $(shell bin/helpmakego cmd/pulumi-lsp)
+	${GO} build ${LINK_VERSION} -o $@ github.com/pulumi/pulumi-lsp/cmd/pulumi-lsp
+
+.PHONY: install
+install: bin/pulumi-lsp
+	install $< $(or $(shell ${GO} env GOBIN),$(shell ${GO} env GOPATH)/bin)
 
 client: emacs-client vscode-client
 
@@ -30,7 +33,7 @@ vscode-build:
 	cd editors/vscode && npm install && npm run test-compile && npm run esbuild
 
 # Because vscode bundles embed the LSP server, we need to build the server first.
-vscode-client: vscode-build server
+vscode-client: vscode-build bin/pulumi-lsp
 	cp LICENSE editors/vscode/LICENSE
 	cp bin/pulumi-lsp editors/vscode/
 	cd editors/vscode && npm exec vsce -- package --out ../../bin/
@@ -47,7 +50,7 @@ clean:
 test: get_schemas
 	go test ./...
 
-.phony: lint lint-copyright lint-golang
+.PHONY: lint lint-copyright lint-golang
 lint:: lint-copyright lint-golang
 lint-golang:
 	golangci-lint run --timeout 5m --config .golangci.yml
