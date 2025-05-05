@@ -538,6 +538,12 @@ func (s *server) completeKey(c lsp.Client, doc *document, params *protocol.Compl
 	case len(parents) == 2 && strings.ToLower(parents[1].B) == "resources":
 		return completeResourceKeys(doc, parents[0].A, post)
 
+	case len(parents) == 1 && strings.ToLower(parents[0].B) == "plugins":
+		return completePluginsKeys(doc, parents[0].A, postFix{2})
+	case len(parents) == 2 && strings.ToLower(parents[0].B) == "plugins" &&
+		strings.ToLower(parents[1].B) == "providers":
+		return completePluginProvidersKeys(doc, parents[1].A, postFix{2})
+
 	// The properties key in a resource
 	case len(parents) == 3 &&
 		strings.ToLower(parents[0].B) == "properties" &&
@@ -861,6 +867,19 @@ func completeResourceOptionsKeys(doc *document, keyPos protocol.Position, post p
 			"Retain on delete leaks the resource on delete instead of removing it from the underlying cloud", post.sameLine},
 		{"deletedWith", "resource",
 			"Deleted with leaks the resource on delete if the referenced resource is also deleted", post.sameLine},
+	})
+}
+
+func completePluginsKeys(doc *document, keyPos protocol.Position, post postFix) (*protocol.CompletionList, error) {
+	return providedCompletions(doc, keyPos, 2, []option{
+		{"providers", "list<provider>", "Additional directives for the provider plugins used", post.intoList},
+	})
+}
+
+func completePluginProvidersKeys(doc *document, keyPos protocol.Position, post postFix) (*protocol.CompletionList, error) {
+	return providedCompletions(doc, keyPos, 4, []option{
+		{"name", "string", "The name of the provider.", post.sameLine},
+		{"path", "string", "The path to the folder that holds pulumi-resource-${NAME}b", post.sameLine},
 	})
 }
 
