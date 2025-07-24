@@ -1,3 +1,4 @@
+permissions: write-all # Equivalent to default permissions plus id-token: write
 name: Publish
 
 on:
@@ -13,13 +14,20 @@ on:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  VSCE_PAT: ${{ secrets.VSCE_PAT }}
+  ESC_ACTION_OIDC_AUTH: true
+  ESC_ACTION_OIDC_ORGANIZATION: pulumi
+  ESC_ACTION_OIDC_REQUESTED_TOKEN_TYPE: urn:pulumi:token-type:access_token:organization
+  ESC_ACTION_ENVIRONMENT: imports/github-secrets
+  ESC_ACTION_EXPORT_ENVIRONMENT_VARIABLES: VSCE_PAT
 
 jobs:
   publish:
     name: Publish
     runs-on: macos-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout Repo
         uses: actions/checkout@v2
       - name: Unshallow clone for tags
@@ -71,6 +79,9 @@ jobs:
             file: darwin_arm64_v8.0
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - uses: actions/checkout@v2
       - name: Install pulumictl
         uses: jaxxstorm/action-install-gh-release@v1.7.1
