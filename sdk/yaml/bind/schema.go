@@ -11,7 +11,7 @@ import (
 	yaml "github.com/pulumi/pulumi-yaml/pkg/pulumiyaml"
 	"github.com/pulumi/pulumi-yaml/pkg/pulumiyaml/ast"
 	"github.com/pulumi/pulumi/pkg/v3/codegen/schema"
-	"github.com/pulumi/pulumi/pkg/v3/resource/deploy/providers"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/providers"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/tokens"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 
@@ -105,7 +105,7 @@ func (d *Decl) LoadSchema(loader schema.ReferenceLoader) {
 						d.diags = d.diags.Extend(f.diag(typeLoc))
 					}
 					v.definition = f.Resource
-					d.validateProperties(util.MapOver(v.defined.Value.Properties.Entries, func(m ast.PropertyMapEntry) MapKey {
+					d.validateProperties(util.MapOver(propertyEntries(v.defined.Value.Properties), func(m ast.PropertyMapEntry) MapKey {
 						return MapKey{m.Key.Value, m.Key.Syntax().Syntax().Range()}
 					}),
 						f.InputProperties, (&schema.ResourceType{

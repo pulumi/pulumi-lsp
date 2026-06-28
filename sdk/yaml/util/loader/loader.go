@@ -18,8 +18,8 @@ type ReferenceLoader interface {
 	Loaded() []schema.PackageDescriptor
 }
 
-func New(host plugin.Host) ReferenceLoader {
-	return &refLoader{inner: schema.NewPluginLoader(host)}
+func New(pctx *plugin.Context) ReferenceLoader {
+	return &refLoader{inner: schema.NewPluginLoader(pctx)}
 }
 
 type refLoader struct {

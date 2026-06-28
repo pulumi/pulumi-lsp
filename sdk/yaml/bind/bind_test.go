@@ -150,7 +150,7 @@ variables:
 
 func newPluginLoader() schema.ReferenceLoader {
 	schemaLoadPath := filepath.Join("..", "testdata")
-	return schema.NewPluginLoader(utils.NewHost(schemaLoadPath))
+	return schema.NewPluginLoader(utils.NewContext(schemaLoadPath))
 }
 
 var rootPluginLoader schema.ReferenceLoader = newPluginLoader()

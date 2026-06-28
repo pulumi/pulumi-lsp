@@ -22,10 +22,10 @@ type server struct {
 }
 
 // Create the set of methods necessary to implement a LSP server for Pulumi YAML.
-func Methods(host plugin.Host) *lsp.Methods {
+func Methods(pctx *plugin.Context) *lsp.Methods {
 	server := &server{
 		docs:    map[protocol.DocumentURI]*document{},
-		schemas: loader.New(host),
+		schemas: loader.New(pctx),
 	}
 	return lsp.Methods{
 		DidOpenFunc:    server.didOpen,

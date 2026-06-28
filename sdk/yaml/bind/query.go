@@ -33,7 +33,7 @@ func (d *Decl) GetResources(tk, version string) ([]Resource, error) {
 	names := []string{tk}
 	if ok {
 		for _, a := range r.Aliases {
-			names = append(names, *a.Type)
+			names = append(names, a.Type)
 		}
 	}
 	var rs []Resource

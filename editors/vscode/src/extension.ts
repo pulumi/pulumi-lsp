@@ -8,19 +8,20 @@ import * as fs from "fs";
 import * as vscode from "vscode";
 import * as lc from "vscode-languageclient/node";
 
-let client: PulumiLSPClient;
+// One client per Pulumi program language. Each launches its own pulumi-lsp
+// process (the YAML backend by default, or `--lang hcl` for Terraform-syntax
+// programs) and is scoped to the files it understands.
+let clients: PulumiLSPClient[] = [];
 
 class PulumiLSPClient extends lc.LanguageClient {
-  constructor(serverOptions: lc.ServerOptions) {
-    // Options to control the language client
-    const clientOptions: lc.LanguageClientOptions = {
-      documentSelector: [
-        { pattern: "**/Pulumi.yaml" },
-        { pattern: "**/Main.yaml" },
-      ],
-    };
-
-    super("pulumi-lsp", "Pulumi LSP", serverOptions, clientOptions);
+  constructor(
+    id: string,
+    name: string,
+    serverOptions: lc.ServerOptions,
+    documentSelector: lc.DocumentSelector,
+  ) {
+    const clientOptions: lc.LanguageClientOptions = { documentSelector };
+    super(id, name, serverOptions, clientOptions);
   }
 }
 
@@ -109,13 +110,23 @@ export async function activate(
     outputChannel().append("\nFailed to find LSP executable");
     return Promise.reject();
   }
-  const serverOptions: lc.ServerOptions = {
-    command: serverPath,
-  };
+  // The YAML backend (default) handles Pulumi.yaml / Main.yaml. A second client
+  // runs the same binary with `--lang hcl` for Terraform-syntax (.tf) programs.
+  const yamlClient = new PulumiLSPClient(
+    "pulumi-lsp",
+    "Pulumi LSP (YAML)",
+    { command: serverPath },
+    [{ pattern: "**/Pulumi.yaml" }, { pattern: "**/Main.yaml" }],
+  );
+  const hclClient = new PulumiLSPClient(
+    "pulumi-lsp-hcl",
+    "Pulumi LSP (HCL)",
+    { command: serverPath, args: ["--lang", "hcl"] },
+    [{ pattern: "**/*.tf" }, { language: "pulumi-hcl" }],
+  );
 
-  // Create the language client and start the client.
-  client = new PulumiLSPClient(serverOptions);
-  client.start();
+  clients = [yamlClient, hclClient];
+  clients.forEach((c) => c.start());
 
   // Ensure that we are not running at the same time as 'Red Hat YAML' without warning the
   // user.
@@ -173,13 +184,13 @@ export async function activate(
     }, 5000);
   }
 
-  return client;
+  return yamlClient;
 }
 
 export function deactivate(): Thenable<void> | undefined {
-  if (!client) {
+  if (clients.length === 0) {
     return undefined;
   }
 
-  return client.stop();
+  return Promise.all(clients.map((c) => c.stop())).then(() => undefined);
 }

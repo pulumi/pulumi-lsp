@@ -94,6 +94,14 @@ func (m Methods) DefaultInitializer(name, version string) *Methods {
 				TriggerCharacters: []string{":"}, // TODO: How should this be provided
 			}
 		}
+		var definition interface{}
+		if m.DefinitionFunc != nil {
+			definition = true
+		}
+		var documentSymbol interface{}
+		if m.DocumentSymbolFunc != nil {
+			documentSymbol = true
+		}
 		var hover *protocol.HoverOptions
 		if m.HoverFunc != nil {
 			hover = &protocol.HoverOptions{
@@ -125,14 +133,14 @@ func (m Methods) DefaultInitializer(name, version string) *Methods {
 				},
 				CompletionProvider: completion,
 				HoverProvider:      hover,
+				DefinitionProvider: definition,
 				// SignatureHelpProvider:            &protocol.SignatureHelpOptions{},
 				// DeclarationProvider:              nil,
-				// DefinitionProvider:               nil,
 				// TypeDefinitionProvider:           nil,
 				// ImplementationProvider:           nil,
 				// ReferencesProvider:               nil,
 				// DocumentHighlightProvider:        nil,
-				// DocumentSymbolProvider:           nil,
+				DocumentSymbolProvider: documentSymbol,
 				CodeActionProvider: codeAction,
 				// CodeLensProvider:                 &protocol.CodeLensOptions{},
 				// DocumentLinkProvider:             &protocol.DocumentLinkOptions{},
