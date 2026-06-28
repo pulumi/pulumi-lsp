@@ -293,7 +293,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 						}},
 					}, nil
 				}
-				pkg, err := s.schemas.LoadPackageReference(parts[0], version())
+				pkg, err := s.schemas.LoadPackageReferenceV2(context.Background(), &schema.PackageDescriptor{Name: parts[0], Version: version()})
 				if err != nil {
 					return nil, err
 				}
@@ -323,7 +323,7 @@ func (s *server) completeType(client lsp.Client, doc *document, params *protocol
 					// There are no valid completions for this token
 					return nil, nil
 				}
-				pkg, err := s.schemas.LoadPackageReference(parts[0], version())
+				pkg, err := s.schemas.LoadPackageReferenceV2(context.Background(), &schema.PackageDescriptor{Name: parts[0], Version: version()})
 				if err != nil {
 					return nil, err
 				}
@@ -644,7 +644,7 @@ func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix pos
 				return nil, nil
 			}
 		}
-		pkg, err := s.schemas.LoadPackageReference(parts[0], nil)
+		pkg, err := s.schemas.LoadPackageReferenceV2(context.Background(), &schema.PackageDescriptor{Name: parts[0]})
 		if err != nil {
 			return nil, err
 		}
@@ -702,7 +702,7 @@ func completeFnShorthand(c lsp.Client, line string, indentLevel int, postFix pos
 
 	case 3:
 		// Here we are completing only invokes in specific modules
-		pkg, err := s.schemas.LoadPackageReference(parts[0], nil)
+		pkg, err := s.schemas.LoadPackageReferenceV2(context.Background(), &schema.PackageDescriptor{Name: parts[0]})
 		if err != nil {
 			return nil, err
 		}

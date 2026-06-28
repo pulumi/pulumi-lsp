@@ -1,7 +1,7 @@
 {
   "name": "pulumi-lsp-client",
-  "displayName": "Pulumi YAML",
-  "description": "IntelliSense and Linting for Pulumi YAML in VSCode",
+  "displayName": "Pulumi",
+  "description": "IntelliSense and Linting for Pulumi YAML and HCL in VSCode",
   "repository": {
     "type": "git",
     "url": "https://github.com/pulumi/pulumi-lsp"
@@ -24,7 +24,8 @@
   },
   "activationEvents": [
     "workspaceContains:**/Pulumi.yaml",
-    "workspaceContains:**/Main.yaml"
+    "workspaceContains:**/Main.yaml",
+    "workspaceContains:**/*.tf"
   ],
   "main": "out/main.js",
   "devDependencies": {
@@ -59,7 +60,27 @@
           "description": "Warn about conflicting extensions and suggest disabling them."
         }
       }
-    }
+    },
+    "languages": [
+      {
+        "id": "pulumi-hcl",
+        "aliases": [
+          "Pulumi HCL",
+          "pulumi-hcl"
+        ],
+        "extensions": [
+          ".tf"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "pulumi-hcl",
+        "scopeName": "source.pulumi-hcl",
+        "path": "./syntaxes/pulumi-hcl.tmLanguage.json"
+      }
+    ]
   },
   "icon": "pulumi-logo.png",
   "bugs": {

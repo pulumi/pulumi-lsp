@@ -10,12 +10,12 @@ import (
 	"runtime"
 	"runtime/debug"
 
-	"github.com/pulumi/pulumi/sdk/v3/go/common/diag"
-	"github.com/pulumi/pulumi/sdk/v3/go/common/diag/colors"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
 	"github.com/spf13/cobra"
 
+	"github.com/pulumi/pulumi-lsp/sdk/hcl"
 	"github.com/pulumi/pulumi-lsp/sdk/lsp"
+	"github.com/pulumi/pulumi-lsp/sdk/pluginhost"
 	"github.com/pulumi/pulumi-lsp/sdk/version"
 	"github.com/pulumi/pulumi-lsp/sdk/yaml"
 )
@@ -30,30 +30,55 @@ func main() {
 }
 
 func newLSPCommand() *cobra.Command {
+	var lang string
 	cmd := &cobra.Command{
 		Use:   "pulumi-lsp",
-		Short: "A LSP for Pulumi YAML",
+		Short: "A LSP for Pulumi YAML and HCL",
 		Args:  cobra.NoArgs,
-		Run: func(*cobra.Command, []string) {
-			host, err := defaultPluginHost()
+		RunE: func(*cobra.Command, []string) error {
+			// A bad --lang is a usage error, not an internal panic.
+			if lang != "" && lang != "yaml" && lang != "hcl" {
+				return fmt.Errorf("unknown --lang %q: expected \"yaml\" or \"hcl\"", lang)
+			}
+			pctx, err := pluginhost.NewContext()
 			if err != nil {
 				panic(err)
 			}
 			defer func() {
-				if err := host.Close(); err != nil {
+				if err := pluginhost.Close(pctx); err != nil {
 					panic(err)
 				}
 			}()
-			server := lsp.NewServer(yaml.Methods(host), &stdio{false})
-			err = server.Run(context.Background())
+			methods, err := methodsForLang(lang, pctx)
 			if err != nil {
 				panic(err)
 			}
+			server := lsp.NewServer(methods, &stdio{false})
+			if err := server.Run(context.Background()); err != nil {
+				panic(err)
+			}
+			return nil
 		},
 	}
 
+	cmd.Flags().StringVar(&lang, "lang", "yaml",
+		"The Pulumi program language to serve: \"yaml\" or \"hcl\".")
+
 	cmd.AddCommand(newVersionCmd())
 	return cmd
+}
+
+// methodsForLang selects the language backend. Each backend implements the same
+// lsp.Methods contract, so the rest of the server is language-agnostic.
+func methodsForLang(lang string, pctx *plugin.Context) (*lsp.Methods, error) {
+	switch lang {
+	case "", "yaml":
+		return yaml.Methods(pctx), nil
+	case "hcl":
+		return hcl.Methods(pctx), nil
+	default:
+		return nil, fmt.Errorf("unknown --lang %q: expected \"yaml\" or \"hcl\"", lang)
+	}
 }
 
 func newVersionCmd() *cobra.Command {
@@ -84,22 +109,6 @@ func panicHandler() {
 		fmt.Fprintln(os.Stderr, stack)
 		os.Exit(1)
 	}
-}
-
-func defaultPluginHost() (plugin.Host, error) {
-	var cfg plugin.ConfigSource
-	pwd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-	sink := diag.DefaultSink(&stdio{false}, &stdio{false}, diag.FormatOptions{
-		Color: colors.Never,
-	})
-	context, err := plugin.NewContext(sink, sink, nil, cfg, pwd, nil, false, nil)
-	if err != nil {
-		return nil, err
-	}
-	return plugin.NewDefaultHost(context, nil, false, nil, nil, nil)
 }
 
 // An io.ReadWriteCloser, whose value indicates if the closer is closed.

@@ -22,6 +22,17 @@ import (
 	"github.com/pulumi/pulumi-lsp/sdk/util"
 )
 
+// propertyEntries returns the key/value entries of a resource's property map.
+// As of pulumi-yaml v1.37, a resource body is a PropertyMapOrExprDecl that is
+// either an expression or a property map, so the entries live behind a possibly
+// nil PropertyMap.
+func propertyEntries(p ast.PropertyMapOrExprDecl) []ast.PropertyMapEntry {
+	if p.PropertyMap == nil {
+		return nil
+	}
+	return p.PropertyMap.Entries
+}
+
 // A bound template.
 //
 // NOTE: the binding need not be complete, and the template need not be valid.
@@ -598,7 +609,7 @@ func (d *Decl) bindResource(r ast.ResourcesMapEntry) error {
 		defined: &r,
 	}
 	entries := map[string]bool{}
-	for _, entry := range r.Value.Properties.Entries {
+	for _, entry := range propertyEntries(r.Value.Properties) {
 		k := entry.Key.Value
 		if entries[k] {
 			d.diags = append(d.diags, duplicateKeyDiag(k, entry.Key.Syntax().Syntax().Range()))

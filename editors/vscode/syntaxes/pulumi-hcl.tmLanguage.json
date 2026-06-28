@@ -1,0 +1,102 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Pulumi HCL",
+  "scopeName": "source.pulumi-hcl",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#blocks" },
+    { "include": "#expression" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.number-sign.hcl", "match": "#.*$" },
+        { "name": "comment.line.double-slash.hcl", "match": "//.*$" },
+        {
+          "name": "comment.block.hcl",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "blocks": {
+      "patterns": [
+        {
+          "comment": "Top-level block type keyword followed by its quoted labels.",
+          "begin": "^\\s*(resource|data|variable|output|provider|module|locals|terraform|dynamic|moved|import|check|removed|connection|provisioner|lifecycle)\\b",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.block.hcl" }
+          },
+          "end": "(?=\\{|\\n)",
+          "patterns": [
+            { "name": "entity.name.type.hcl", "match": "\"[^\"]*\"" }
+          ]
+        }
+      ]
+    },
+    "expression": {
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#strings" },
+        { "name": "constant.language.hcl", "match": "\\b(true|false|null)\\b" },
+        { "name": "constant.numeric.hcl", "match": "\\b-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b" },
+        { "name": "keyword.operator.word.hcl", "match": "\\b(for|in|if|else|endfor|endif)\\b" },
+        {
+          "comment": "Function call.",
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+          "name": "support.function.hcl"
+        },
+        {
+          "comment": "Reference root (var, local, module, data, each, count, self, path).",
+          "match": "\\b(var|local|module|data|each|count|self|path|terraform)\\.",
+          "captures": {
+            "1": { "name": "variable.language.hcl" }
+          }
+        },
+        {
+          "comment": "Attribute name on the left of an =.",
+          "match": "([a-zA-Z_][a-zA-Z0-9_-]*)\\s*(=)(?!=)",
+          "captures": {
+            "1": { "name": "variable.other.property.hcl" },
+            "2": { "name": "keyword.operator.assignment.hcl" }
+          }
+        },
+        { "name": "keyword.operator.hcl", "match": "=>|\\?|:|\\=\\=|\\!\\=|<=|>=|&&|\\|\\||!|\\+|\\-|\\*|/|%|<|>" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.hcl",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.hcl", "match": "\\\\." },
+            {
+              "name": "meta.interpolation.hcl",
+              "begin": "\\$\\{",
+              "end": "\\}",
+              "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.hcl" } },
+              "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.hcl" } },
+              "patterns": [{ "include": "#expression" }]
+            }
+          ]
+        },
+        {
+          "comment": "Heredoc.",
+          "name": "string.unquoted.heredoc.hcl",
+          "begin": "<<-?\\s*(\\w+)",
+          "end": "^\\s*\\1\\b",
+          "patterns": [
+            {
+              "name": "meta.interpolation.hcl",
+              "begin": "\\$\\{",
+              "end": "\\}",
+              "patterns": [{ "include": "#expression" }]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
