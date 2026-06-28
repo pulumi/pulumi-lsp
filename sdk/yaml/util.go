@@ -3,6 +3,7 @@
 package yaml
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -103,7 +104,7 @@ func resolveResource(c lsp.Client, loader schema.ReferenceLoader, token, version
 		}
 		v = &version
 	}
-	schema, err := loader.LoadPackageReference(pkg, v)
+	schema, err := loader.LoadPackageReferenceV2(context.Background(), &schema.PackageDescriptor{Name: pkg, Version: v})
 	if err != nil {
 		return nil, fmt.Errorf("could not resolve resource: %w", err)
 	}
@@ -141,7 +142,7 @@ func resolveFunction(c lsp.Client, loader schema.ReferenceLoader, token, version
 		}
 		v = &version
 	}
-	schema, err := loader.LoadPackageReference(pkg, v)
+	schema, err := loader.LoadPackageReferenceV2(context.Background(), &schema.PackageDescriptor{Name: pkg, Version: v})
 	if err != nil {
 		return nil, fmt.Errorf("could not resolve function: %w", err)
 	}

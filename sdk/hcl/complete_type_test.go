@@ -43,7 +43,7 @@ func TestResourceTypeLineDetection(t *testing.T) {
 func TestListTypes(t *testing.T) {
 	pctx, err := pluginhost.NewContext()
 	require.NoError(t, err)
-	defer pluginhost.Close(pctx)
+	defer func() { _ = pluginhost.Close(pctx) }()
 
 	s := &server{
 		loader:     schema.NewPluginLoader(pctx),

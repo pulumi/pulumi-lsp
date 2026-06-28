@@ -40,7 +40,7 @@ func (r *refLoader) Loaded() []schema.PackageDescriptor {
 
 // deprecated: use LoadPackageV2
 func (r *refLoader) LoadPackage(pkg string, version *semver.Version) (*schema.Package, error) {
-	p, err := r.inner.LoadPackage(pkg, version)
+	p, err := r.inner.LoadPackageV2(context.Background(), &schema.PackageDescriptor{Name: pkg, Version: version})
 	if err != nil {
 		return p, err
 	}
@@ -59,7 +59,7 @@ func (r *refLoader) LoadPackageV2(ctx context.Context, descriptor *schema.Packag
 
 // deprecated: use LoadPackageReferenceV2
 func (r *refLoader) LoadPackageReference(pkg string, version *semver.Version) (schema.PackageReference, error) {
-	p, err := r.inner.LoadPackageReference(pkg, version)
+	p, err := r.inner.LoadPackageReferenceV2(context.Background(), &schema.PackageDescriptor{Name: pkg, Version: version})
 	if err != nil {
 		return p, err
 	}

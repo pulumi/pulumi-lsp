@@ -3,6 +3,7 @@
 package bind
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -150,7 +151,44 @@ variables:
 
 func newPluginLoader() schema.ReferenceLoader {
 	schemaLoadPath := filepath.Join("..", "testdata")
-	return schema.NewPluginLoader(utils.NewContext(schemaLoadPath))
+	// Register every schema present in the testdata directory (downloaded by
+	// `make get_schemas`). utils.NewContext only exposes a fixed allow-list, so
+	// we build the provider set from the files on disk to mirror the old
+	// load-everything behavior the bind tests rely on (e.g. eks).
+	var providers []utils.SchemaProvider
+	for _, entry := range readSchemaDir(schemaLoadPath) {
+		base := strings.TrimSuffix(entry, ".json")
+		// Files are named <package>-<version>.json. The package may contain
+		// dashes (azure-native) and the version may have a prerelease suffix
+		// (1.0.0-beta.5), so split at the first '-' that begins the version —
+		// i.e. a '-' immediately followed by a digit.
+		sep := -1
+		for i := 0; i+1 < len(base); i++ {
+			if base[i] == '-' && base[i+1] >= '0' && base[i+1] <= '9' {
+				sep = i
+				break
+			}
+		}
+		if sep <= 0 {
+			continue
+		}
+		providers = append(providers, utils.NewSchemaProvider(base[:sep], base[sep+1:]))
+	}
+	return schema.NewPluginLoader(utils.NewContextWithProviders(schemaLoadPath, providers...))
+}
+
+func readSchemaDir(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			names = append(names, e.Name())
+		}
+	}
+	return names
 }
 
 var rootPluginLoader schema.ReferenceLoader = newPluginLoader()

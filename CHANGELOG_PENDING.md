@@ -1,5 +1,10 @@
 ### Improvements
 
+- [hcl] Add Pulumi HCL language server support: diagnostics, schema-backed hover
+  and completion, go-to-definition, document symbols, and `.tf` syntax
+  highlighting. Served via `pulumi-lsp --lang hcl`.
+  [#123](https://github.com/pulumi/pulumi-lsp/pull/123)
+
 - Depend on Pulumi YAML v0.5.10.
   [#75](https://github.com/pulumi/pulumi-lsp/pull/75)
 

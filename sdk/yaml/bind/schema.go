@@ -3,6 +3,7 @@
 package bind
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -319,7 +320,7 @@ func (d *Decl) loadPackage(tk, version string, loader schema.ReferenceLoader, er
 			}
 			v = &version
 		}
-		p, err := loader.LoadPackageReference(pkgName, v)
+		p, err := loader.LoadPackageReferenceV2(context.Background(), &schema.PackageDescriptor{Name: pkgName, Version: v})
 		var pkg pkgCache
 		if err != nil {
 			pkg = pkgCache{

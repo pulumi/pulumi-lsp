@@ -22,7 +22,7 @@ import (
 func TestResolveAndDescribe(t *testing.T) {
 	pctx, err := pluginhost.NewContext()
 	require.NoError(t, err)
-	defer pluginhost.Close(pctx)
+	defer func() { _ = pluginhost.Close(pctx) }()
 
 	s := &server{
 		loader:     schema.NewPluginLoader(pctx),
@@ -65,7 +65,7 @@ func TestResolveAndDescribe(t *testing.T) {
 func TestPropertyHover(t *testing.T) {
 	pctx, err := pluginhost.NewContext()
 	require.NoError(t, err)
-	defer pluginhost.Close(pctx)
+	defer func() { _ = pluginhost.Close(pctx) }()
 
 	s := &server{loader: schema.NewPluginLoader(pctx), infoSource: newProviderInfoSource(pctx)}
 	config, _ := hclparser.NewParser().ParseSource("Main.tf", []byte(sampleProgram))
@@ -94,7 +94,7 @@ func TestPropertyHover(t *testing.T) {
 func TestBridgeResolvesNativeProvider(t *testing.T) {
 	pctx, err := pluginhost.NewContext()
 	require.NoError(t, err)
-	defer pluginhost.Close(pctx)
+	defer func() { _ = pluginhost.Close(pctx) }()
 
 	s := &server{
 		loader:     schema.NewPluginLoader(pctx),
